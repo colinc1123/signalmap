@@ -18,6 +18,21 @@ class MessageIn(BaseModel):
 def create_message(message: MessageIn):
     db = SessionLocal()
     try:
+        existing = (
+            db.query(Message)
+            .filter(
+                Message.source_name == message.source_name,
+                Message.external_message_id == message.external_message_id,
+            )
+            .first()
+        )
+
+        if existing:
+            return {
+                "message": "duplicate ignored",
+                "id": existing.id,
+            }
+
         msg = Message(
             source_name=message.source_name,
             external_message_id=message.external_message_id,
@@ -27,6 +42,7 @@ def create_message(message: MessageIn):
         db.add(msg)
         db.commit()
         db.refresh(msg)
+
         return {
             "message": "message inserted",
             "id": msg.id,
@@ -88,6 +104,32 @@ def get_messages():
     db = SessionLocal()
     try:
         messages = db.query(Message).order_by(Message.id.desc()).limit(20).all()
+        return [
+            {
+                "id": m.id,
+                "source_name": m.source_name,
+                "external_message_id": m.external_message_id,
+                "text": m.text,
+                "has_media": m.has_media,
+                "posted_at": m.posted_at,
+                "collected_at": m.collected_at,
+            }
+            for m in messages
+        ]
+    finally:
+        db.close()
+
+@app.get("/messages/by-source/{source_name}")
+def get_messages_by_source(source_name: str):
+    db = SessionLocal()
+    try:
+        messages = (
+            db.query(Message)
+            .filter(Message.source_name == source_name)
+            .order_by(Message.id.desc())
+            .limit(50)
+            .all()
+        )
         return [
             {
                 "id": m.id,
