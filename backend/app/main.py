@@ -9,16 +9,17 @@ app = FastAPI(title="SignalMap API")
 @app.on_event("startup")
 def startup():
     Base.metadata.create_all(bind=engine)
+    print("=== SIGNALMAP STARTUP RAN ===")
 
 
 @app.get("/")
 def root():
-    return {"message": "SignalMap API is running"}
+    return {"message": "ROOT WORKS"}
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "HEALTH WORKS"}
 
 
 @app.get("/db-check")
@@ -26,9 +27,14 @@ def db_check():
     db = SessionLocal()
     try:
         db.execute(text("SELECT 1"))
-        return {"database": "connected"}
+        return {"database": "CONNECTED"}
     finally:
         db.close()
+
+
+@app.get("/route-test")
+def route_test():
+    return {"route": "ROUTE TEST WORKS"}
 
 
 @app.post("/test-message")
@@ -44,10 +50,7 @@ def create_test_message():
         db.add(msg)
         db.commit()
         db.refresh(msg)
-        return {
-            "message": "test message inserted",
-            "id": msg.id
-        }
+        return {"message": "test message inserted", "id": msg.id}
     finally:
         db.close()
 
