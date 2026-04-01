@@ -2,9 +2,37 @@ from fastapi import FastAPI
 from sqlalchemy import text
 from app.db.session import engine, SessionLocal, Base
 from app.db.models import Message
+from pydantic import BaseModel
+from typing import Optional
 
 app = FastAPI(title="SignalMap API")
 
+
+class MessageIn(BaseModel):
+    source_name: str
+    external_message_id: str
+    text: str
+    has_media: bool = False
+
+@app.post("/messages")
+def create_message(message: MessageIn):
+    db = SessionLocal()
+    try:
+        msg = Message(
+            source_name=message.source_name,
+            external_message_id=message.external_message_id,
+            text=message.text,
+            has_media=message.has_media,
+        )
+        db.add(msg)
+        db.commit()
+        db.refresh(msg)
+        return {
+            "message": "message inserted",
+            "id": msg.id,
+        }
+    finally:
+        db.close()
 
 @app.on_event("startup")
 def startup():
