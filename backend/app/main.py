@@ -4,10 +4,17 @@ from app.db.session import engine, SessionLocal, Base
 from app.db.models import Message
 from pydantic import BaseModel
 from typing import Optional
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="SignalMap API")
 
-
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # later lock this down to your frontend domain
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 def classify_region(text: str) -> str | None:
     lowered = text.lower()

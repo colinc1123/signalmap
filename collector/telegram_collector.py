@@ -2,6 +2,7 @@ import os
 from dotenv import load_dotenv
 from telethon import TelegramClient, events
 import requests
+from telethon.sessions import StringSession
 
 
 
@@ -12,17 +13,16 @@ if not signalmap_api_url:
     raise ValueError("Missing SIGNALMAP_API_URL in .env")
 
 target_channels_raw = os.getenv("TELEGRAM_TARGET_CHANNELS", "")
-TARGET_CHANNELS = [c.strip().lower() for c in target_channels_raw.split(",") if c.strip()]
+TARGET_CHANNELS = {c.strip().lower() for c in target_channels_raw.split(",") if c.strip()}
 
 api_id = os.getenv("TELEGRAM_API_ID")
 api_hash = os.getenv("TELEGRAM_API_HASH")
-phone = os.getenv("TELEGRAM_PHONE")
+string_session = os.getenv("TELEGRAM_STRING_SESSION", "")
 
-if not api_id or not api_hash or not phone:
-    raise ValueError("Missing TELEGRAM_API_ID, TELEGRAM_API_HASH, or TELEGRAM_PHONE in .env")
+if not api_id or not api_hash or not string_session:
+    raise ValueError("Missing TELEGRAM_API_ID, TELEGRAM_API_HASH, or TELEGRAM_STRING_SESSION in .env")
 
-client = TelegramClient("signalmap_session", int(api_id), api_hash)
-
+client = TelegramClient(StringSession(string_session), int(api_id), api_hash)
 
 @client.on(events.NewMessage)
 async def handler(event):
@@ -82,11 +82,10 @@ async def handler(event):
 
 
 async def main():
-    await client.start(phone=phone)
+    await client.start()
     print("Telegram collector connected.")
     print("Listening for new messages...")
     await client.run_until_disconnected()
-
 
 with client:
     client.loop.run_until_complete(main())
