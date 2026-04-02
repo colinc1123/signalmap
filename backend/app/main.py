@@ -8,6 +8,34 @@ from typing import Optional
 app = FastAPI(title="SignalMap API")
 
 
+
+def classify_region(text: str) -> str | None:
+    lowered = text.lower()
+
+    if "tehran" in lowered or "iran" in lowered:
+        return "Iran"
+    if "ukraine" in lowered or "kharkiv" in lowered or "kyiv" in lowered:
+        return "Ukraine"
+    if "israel" in lowered or "gaza" in lowered:
+        return "Israel/Gaza"
+
+    return None
+
+
+def classify_category(text: str) -> str | None:
+    lowered = text.lower()
+
+    if "drone" in lowered or "uav" in lowered:
+        return "uav"
+    if "explosion" in lowered or "blast" in lowered or "strike" in lowered:
+        return "strike"
+    if "missile" in lowered or "rocket" in lowered:
+        return "missile"
+    if "troop" in lowered or "convoy" in lowered:
+        return "movement"
+
+    return None
+
 class MessageIn(BaseModel):
     source_name: str
     external_message_id: str
@@ -31,13 +59,20 @@ def create_message(message: MessageIn):
             return {
                 "message": "duplicate ignored",
                 "id": existing.id,
+                "region": existing.region,
+                "category": existing.category,
             }
+
+        region = classify_region(message.text)
+        category = classify_category(message.text)
 
         msg = Message(
             source_name=message.source_name,
             external_message_id=message.external_message_id,
             text=message.text,
             has_media=message.has_media,
+            region=region,
+            category=category,
         )
         db.add(msg)
         db.commit()
@@ -46,6 +81,8 @@ def create_message(message: MessageIn):
         return {
             "message": "message inserted",
             "id": msg.id,
+            "region": msg.region,
+            "category": msg.category,
         }
     finally:
         db.close()
@@ -111,6 +148,8 @@ def get_messages():
                 "external_message_id": m.external_message_id,
                 "text": m.text,
                 "has_media": m.has_media,
+                "region": m.region,
+                "category": m.category,
                 "posted_at": m.posted_at,
                 "collected_at": m.collected_at,
             }
@@ -137,6 +176,8 @@ def get_messages_by_source(source_name: str):
                 "external_message_id": m.external_message_id,
                 "text": m.text,
                 "has_media": m.has_media,
+                "region": m.region,
+                "category": m.category,
                 "posted_at": m.posted_at,
                 "collected_at": m.collected_at,
             }
