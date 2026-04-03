@@ -5,14 +5,18 @@ from typing import Optional
 import boto3
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import RedirectResponse
+from botocore.exceptions import ClientError
 from pydantic import BaseModel
 from sqlalchemy import text
 
 from app.db.session import engine, SessionLocal, Base
 from app.db.models import Message
 
+
+
 app = FastAPI(title="SignalMap API")
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -88,14 +92,26 @@ class MessageIn(BaseModel):
     media_object_key: Optional[str] = None
     posted_at: Optional[datetime] = None
 
+from fastapi.responses import RedirectResponse
+from botocore.exceptions import ClientError
 
 @app.get("/media/{object_name:path}")
 def get_media(object_name: str):
     try:
-        obj = s3.get_object(Bucket=AWS_S3_BUCKET_NAME, Key=object_name)
-        content_type = obj.get("ContentType", "application/octet-stream")
-        return StreamingResponse(obj["Body"], media_type=content_type)
-    except Exception:
+        s3.head_object(Bucket=AWS_S3_BUCKET_NAME, Key=object_name)
+
+        presigned_url = s3.generate_presigned_url(
+            "get_object",
+            Params={
+                "Bucket": AWS_S3_BUCKET_NAME,
+                "Key": object_name,
+            },
+            ExpiresIn=3600,
+        )
+
+        return RedirectResponse(url=presigned_url, status_code=307)
+
+    except ClientError:
         raise HTTPException(status_code=404, detail="Media not found")
 
 
