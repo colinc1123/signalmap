@@ -1,10 +1,15 @@
+import os
+from datetime import datetime
+from typing import Optional
+
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 from sqlalchemy import text
+
 from app.db.session import engine, SessionLocal, Base
 from app.db.models import Message
-from pydantic import BaseModel
-from typing import Optional
-from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="SignalMap API")
 
@@ -15,6 +20,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+MEDIA_DIR = os.getenv("MEDIA_DIR", "/data/media")
+os.makedirs(MEDIA_DIR, exist_ok=True)
+app.mount("/media", StaticFiles(directory=MEDIA_DIR), name="media")
+
 
 def classify_region(text: str) -> str | None:
     lowered = text.lower()
@@ -43,11 +53,17 @@ def classify_category(text: str) -> str | None:
 
     return None
 
+
 class MessageIn(BaseModel):
     source_name: str
     external_message_id: str
-    text: str
+    text: Optional[str] = ""
     has_media: bool = False
+    media_type: Optional[str] = None
+    media_path: Optional[str] = None
+    media_url: Optional[str] = None
+    posted_at: Optional[datetime] = None
+
 
 @app.post("/messages")
 def create_message(message: MessageIn):
@@ -68,18 +84,24 @@ def create_message(message: MessageIn):
                 "id": existing.id,
                 "region": existing.region,
                 "category": existing.category,
+                "media_url": existing.media_url,
             }
 
-        region = classify_region(message.text)
-        category = classify_category(message.text)
+        safe_text = message.text or ""
+        region = classify_region(safe_text)
+        category = classify_category(safe_text)
 
         msg = Message(
             source_name=message.source_name,
             external_message_id=message.external_message_id,
-            text=message.text,
+            text=safe_text,
             has_media=message.has_media,
+            media_type=message.media_type,
+            media_path=message.media_path,
+            media_url=message.media_url,
             region=region,
             category=category,
+            posted_at=message.posted_at,
         )
         db.add(msg)
         db.commit()
@@ -90,14 +112,17 @@ def create_message(message: MessageIn):
             "id": msg.id,
             "region": msg.region,
             "category": msg.category,
+            "media_url": msg.media_url,
         }
     finally:
         db.close()
+
 
 @app.on_event("startup")
 def startup():
     Base.metadata.create_all(bind=engine)
     print("=== SIGNALMAP STARTUP RAN ===")
+    print(f"=== MEDIA DIR: {MEDIA_DIR} ===")
 
 
 @app.get("/")
@@ -134,6 +159,9 @@ def create_test_message():
             external_message_id="12345",
             text="This is a test message from SignalMap.",
             has_media=False,
+            media_type=None,
+            media_path=None,
+            media_url=None,
         )
         db.add(msg)
         db.commit()
@@ -155,6 +183,9 @@ def get_messages():
                 "external_message_id": m.external_message_id,
                 "text": m.text,
                 "has_media": m.has_media,
+                "media_type": m.media_type,
+                "media_path": m.media_path,
+                "media_url": m.media_url,
                 "region": m.region,
                 "category": m.category,
                 "posted_at": m.posted_at,
@@ -164,6 +195,7 @@ def get_messages():
         ]
     finally:
         db.close()
+
 
 @app.get("/messages/by-source/{source_name}")
 def get_messages_by_source(source_name: str):
@@ -183,6 +215,9 @@ def get_messages_by_source(source_name: str):
                 "external_message_id": m.external_message_id,
                 "text": m.text,
                 "has_media": m.has_media,
+                "media_type": m.media_type,
+                "media_path": m.media_path,
+                "media_url": m.media_url,
                 "region": m.region,
                 "category": m.category,
                 "posted_at": m.posted_at,
