@@ -82,7 +82,7 @@ def upload_file_to_bucket(local_path: str, object_key: str) -> None:
     if content_type:
         extra_args["ContentType"] = content_type
 
-s3.upload_file(local_path, AWS_S3_BUCKET_NAME, object_key, ExtraArgs=extra_args)
+    s3.upload_file(local_path, AWS_S3_BUCKET_NAME, object_key, ExtraArgs=extra_args)
 
 @client.on(events.NewMessage)
 async def handler(event):
