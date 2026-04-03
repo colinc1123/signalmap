@@ -8,8 +8,11 @@ type MessageItem = {
   id: number;
   source_name: string;
   external_message_id: string;
-  text: string;
+  text: string | null;
   has_media: boolean;
+  media_type: string | null;
+  media_path: string | null;
+  media_url: string | null;
   region: string | null;
   category: string | null;
   posted_at: string | null;
@@ -241,15 +244,46 @@ export default function SignalMapLiveFeed() {
                 </div>
 
                 <p className="text-lg leading-8 text-white/90 mb-5 whitespace-pre-wrap break-words">
-                  {item.text || "[Media-only post]"}
-                </p>
+  {item.text || "[Media-only post]"}
+</p>
 
-                <div className="flex flex-wrap gap-2">
+{item.media_url && item.media_type === "image" && (
+  <img
+    src={item.media_url}
+    alt="Post media"
+    className="mb-5 w-full max-w-2xl rounded-2xl border border-white/10"
+  />
+)}
+
+{item.media_url && item.media_type === "video" && (
+  <video
+    src={item.media_url}
+    controls
+    className="mb-5 w-full max-w-2xl rounded-2xl border border-white/10"
+  />
+)}
+
+{item.media_url && item.media_type === "document" && (
+  <a
+    href={item.media_url}
+    target="_blank"
+    rel="noreferrer"
+    className="mb-5 inline-block text-cyan-300 underline"
+  >
+    Open attachment
+  </a>
+)}
+
+<div className="flex flex-wrap gap-2">
                   <Badge label={`Region: ${item.region ?? "Unclassified"}`} />
                   <Badge
                     label={`Category: ${item.category ?? "Unclassified"}`}
                   />
-                  <Badge label={`Media: ${item.has_media ? "Yes" : "No"}`} />
+                  <Badge
+                      label={`Media: ${
+                      item.has_media ? item.media_type ?? "Yes" : "No"
+  }`}
+/>
                 </div>
               </div>
             ))}
