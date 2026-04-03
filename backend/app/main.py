@@ -2,9 +2,10 @@ import os
 from datetime import datetime
 from typing import Optional
 
-from fastapi import FastAPI
+import boto3
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import text
 
@@ -21,9 +22,31 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-MEDIA_DIR = os.getenv("MEDIA_DIR", "/data/media")
-os.makedirs(MEDIA_DIR, exist_ok=True)
-app.mount("/media", StaticFiles(directory=MEDIA_DIR), name="media")
+BACKEND_BASE_URL = os.getenv("BACKEND_BASE_URL", "").rstrip("/")
+
+AWS_ENDPOINT_URL = os.getenv("AWS_ENDPOINT_URL")
+AWS_S3_BUCKET_NAME = os.getenv("AWS_S3_BUCKET_NAME")
+AWS_DEFAULT_REGION = os.getenv("AWS_DEFAULT_REGION")
+AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
+
+if not all([
+    BACKEND_BASE_URL,
+    AWS_ENDPOINT_URL,
+    AWS_S3_BUCKET_NAME,
+    AWS_DEFAULT_REGION,
+    AWS_ACCESS_KEY_ID,
+    AWS_SECRET_ACCESS_KEY,
+]):
+    raise ValueError("Missing required backend environment variables")
+
+s3 = boto3.client(
+    "s3",
+    endpoint_url=AWS_ENDPOINT_URL,
+    aws_access_key_id=AWS_ACCESS_KEY_ID,
+    aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+    region_name=AWS_DEFAULT_REGION,
+)
 
 
 def classify_region(text: str) -> str | None:
@@ -62,7 +85,18 @@ class MessageIn(BaseModel):
     media_type: Optional[str] = None
     media_path: Optional[str] = None
     media_url: Optional[str] = None
+    media_object_key: Optional[str] = None
     posted_at: Optional[datetime] = None
+
+
+@app.get("/media/{object_name:path}")
+def get_media(object_name: str):
+    try:
+        obj = s3.get_object(Bucket=AWS_S3_BUCKET_NAME, Key=object_name)
+        content_type = obj.get("ContentType", "application/octet-stream")
+        return StreamingResponse(obj["Body"], media_type=content_type)
+    except Exception:
+        raise HTTPException(status_code=404, detail="Media not found")
 
 
 @app.post("/messages")
@@ -91,14 +125,21 @@ def create_message(message: MessageIn):
         region = classify_region(safe_text)
         category = classify_category(safe_text)
 
+        generated_media_url = (
+            f"{BACKEND_BASE_URL}/media/{message.media_object_key}"
+            if message.media_object_key
+            else None
+        )
+
         msg = Message(
             source_name=message.source_name,
             external_message_id=message.external_message_id,
             text=safe_text,
             has_media=message.has_media,
             media_type=message.media_type,
-            media_path=message.media_path,
-            media_url=message.media_url,
+            media_path=None,
+            media_url=generated_media_url,
+            media_object_key=message.media_object_key,
             region=region,
             category=category,
             posted_at=message.posted_at,
@@ -122,7 +163,6 @@ def create_message(message: MessageIn):
 def startup():
     Base.metadata.create_all(bind=engine)
     print("=== SIGNALMAP STARTUP RAN ===")
-    print(f"=== MEDIA DIR: {MEDIA_DIR} ===")
 
 
 @app.get("/")
@@ -162,6 +202,7 @@ def create_test_message():
             media_type=None,
             media_path=None,
             media_url=None,
+            media_object_key=None,
         )
         db.add(msg)
         db.commit()
@@ -186,6 +227,7 @@ def get_messages():
                 "media_type": m.media_type,
                 "media_path": m.media_path,
                 "media_url": m.media_url,
+                "media_object_key": m.media_object_key,
                 "region": m.region,
                 "category": m.category,
                 "posted_at": m.posted_at,
@@ -218,6 +260,7 @@ def get_messages_by_source(source_name: str):
                 "media_type": m.media_type,
                 "media_path": m.media_path,
                 "media_url": m.media_url,
+                "media_object_key": m.media_object_key,
                 "region": m.region,
                 "category": m.category,
                 "posted_at": m.posted_at,

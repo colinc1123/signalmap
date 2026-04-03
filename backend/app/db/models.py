@@ -15,6 +15,7 @@ class Message(Base):
     media_type = Column(String, nullable=True)
     media_path = Column(String, nullable=True)
     media_url = Column(String, nullable=True)
+    media_object_key = Column(String, nullable=True)
 
     region = Column(String, nullable=True)
     category = Column(String, nullable=True)
