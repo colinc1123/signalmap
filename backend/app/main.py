@@ -9,6 +9,7 @@ from fastapi.responses import RedirectResponse
 from botocore.exceptions import ClientError
 from pydantic import BaseModel
 from sqlalchemy import text
+from app.classification.classifier import classify_message
 
 from app.db.session import engine, SessionLocal, Base
 from app.db.models import Message
@@ -53,32 +54,7 @@ s3 = boto3.client(
 )
 
 
-def classify_region(text: str) -> str | None:
-    lowered = text.lower()
 
-    if "tehran" in lowered or "iran" in lowered:
-        return "Iran"
-    if "ukraine" in lowered or "kharkiv" in lowered or "kyiv" in lowered:
-        return "Ukraine"
-    if "israel" in lowered or "gaza" in lowered:
-        return "Israel/Gaza"
-
-    return None
-
-
-def classify_category(text: str) -> str | None:
-    lowered = text.lower()
-
-    if "drone" in lowered or "uav" in lowered:
-        return "uav"
-    if "explosion" in lowered or "blast" in lowered or "strike" in lowered:
-        return "strike"
-    if "missile" in lowered or "rocket" in lowered:
-        return "missile"
-    if "troop" in lowered or "convoy" in lowered:
-        return "movement"
-
-    return None
 
 
 class MessageIn(BaseModel):
@@ -130,16 +106,22 @@ def create_message(message: MessageIn):
 
         if existing:
             return {
-                "message": "duplicate ignored",
-                "id": existing.id,
-                "region": existing.region,
-                "category": existing.category,
-                "media_url": existing.media_url,
-            }
-
+    "message": "duplicate ignored",
+    "id": existing.id,
+    "region": existing.region,
+    "country": existing.country,
+    "event_domain": existing.event_domain,
+    "event_type": existing.event_type,
+    "event_subtype": existing.event_subtype,
+    "weapon_type": existing.weapon_type,
+    "claim_status": existing.claim_status,
+    "confidence": existing.confidence,
+    "media_url": existing.media_url,
+}
         safe_text = message.text or ""
-        region = classify_region(safe_text)
-        category = classify_category(safe_text)
+        classification = classify_message(safe_text)
+
+        print("CLASSIFICATION:", classification)
 
         generated_media_url = (
             f"{BACKEND_BASE_URL}/media/{message.media_object_key}"
@@ -156,8 +138,17 @@ def create_message(message: MessageIn):
             media_path=None,
             media_url=generated_media_url,
             media_object_key=message.media_object_key,
-            region=region,
-            category=category,
+            region=classification["region"],
+            country=classification["country"],
+            event_domain=classification["event_domain"],
+            event_type=classification["event_type"],
+            event_subtype=classification["event_subtype"],
+            weapon_type=classification["weapon_type"],
+            target_type=classification["target_type"],
+            actor_primary=classification["actor_primary"],
+            claim_status=classification["claim_status"],
+            confidence=classification["confidence"],
+            matched_terms=classification["matched_terms"],
             posted_at=message.posted_at,
         )
         db.add(msg)
@@ -165,11 +156,17 @@ def create_message(message: MessageIn):
         db.refresh(msg)
 
         return {
-            "message": "message inserted",
-            "id": msg.id,
-            "region": msg.region,
-            "category": msg.category,
-            "media_url": msg.media_url,
+        "message": "message inserted",
+        "id": msg.id,
+        "region": msg.region,
+        "country": msg.country,
+        "event_domain": msg.event_domain,
+        "event_type": msg.event_type,
+        "event_subtype": msg.event_subtype,
+        "weapon_type": msg.weapon_type,
+        "claim_status": msg.claim_status,
+        "confidence": msg.confidence,
+        "media_url": msg.media_url,
         }
     finally:
         db.close()
@@ -235,20 +232,29 @@ def get_messages():
         messages = db.query(Message).order_by(Message.id.desc()).limit(20).all()
         return [
             {
-                "id": m.id,
-                "source_name": m.source_name,
-                "external_message_id": m.external_message_id,
-                "text": m.text,
-                "has_media": m.has_media,
-                "media_type": m.media_type,
-                "media_path": m.media_path,
-                "media_url": m.media_url,
-                "media_object_key": m.media_object_key,
-                "region": m.region,
-                "category": m.category,
-                "posted_at": m.posted_at,
-                "collected_at": m.collected_at,
-            }
+    "id": m.id,
+    "source_name": m.source_name,
+    "external_message_id": m.external_message_id,
+    "text": m.text,
+    "has_media": m.has_media,
+    "media_type": m.media_type,
+    "media_path": m.media_path,
+    "media_url": m.media_url,
+    "media_object_key": m.media_object_key,
+    "region": m.region,
+    "country": m.country,
+    "event_domain": m.event_domain,
+    "event_type": m.event_type,
+    "event_subtype": m.event_subtype,
+    "weapon_type": m.weapon_type,
+    "target_type": m.target_type,
+    "actor_primary": m.actor_primary,
+    "claim_status": m.claim_status,
+    "confidence": m.confidence,
+    "matched_terms": m.matched_terms,
+    "posted_at": m.posted_at,
+    "collected_at": m.collected_at,
+}
             for m in messages
         ]
     finally:
@@ -268,20 +274,29 @@ def get_messages_by_source(source_name: str):
         )
         return [
             {
-                "id": m.id,
-                "source_name": m.source_name,
-                "external_message_id": m.external_message_id,
-                "text": m.text,
-                "has_media": m.has_media,
-                "media_type": m.media_type,
-                "media_path": m.media_path,
-                "media_url": m.media_url,
-                "media_object_key": m.media_object_key,
-                "region": m.region,
-                "category": m.category,
-                "posted_at": m.posted_at,
-                "collected_at": m.collected_at,
-            }
+    "id": m.id,
+    "source_name": m.source_name,
+    "external_message_id": m.external_message_id,
+    "text": m.text,
+    "has_media": m.has_media,
+    "media_type": m.media_type,
+    "media_path": m.media_path,
+    "media_url": m.media_url,
+    "media_object_key": m.media_object_key,
+    "region": m.region,
+    "country": m.country,
+    "event_domain": m.event_domain,
+    "event_type": m.event_type,
+    "event_subtype": m.event_subtype,
+    "weapon_type": m.weapon_type,
+    "target_type": m.target_type,
+    "actor_primary": m.actor_primary,
+    "claim_status": m.claim_status,
+    "confidence": m.confidence,
+    "matched_terms": m.matched_terms,
+    "posted_at": m.posted_at,
+    "collected_at": m.collected_at,
+}
             for m in messages
         ]
     finally:

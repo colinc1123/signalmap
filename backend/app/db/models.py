@@ -18,7 +18,17 @@ class Message(Base):
     media_object_key = Column(String, nullable=True)
 
     region = Column(String, nullable=True)
-    category = Column(String, nullable=True)
+    region = Column(String, nullable=True)
+    country = Column(String, nullable=True)
+    event_domain = Column(String, nullable=True)
+    event_type = Column(String, nullable=True)
+    event_subtype = Column(String, nullable=True)
+    weapon_type = Column(String, nullable=True)
+    target_type = Column(String, nullable=True)
+    actor_primary = Column(String, nullable=True)
+    claim_status = Column(String, nullable=True)
+    confidence = Column(String, nullable=True)
+    matched_terms = Column(String, nullable=True)
 
     posted_at = Column(DateTime(timezone=True), nullable=True)
     collected_at = Column(DateTime(timezone=True), server_default=func.now())
