@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 import boto3
@@ -10,7 +10,7 @@ from botocore.exceptions import ClientError
 from pydantic import BaseModel
 from sqlalchemy import text
 from app.classification.classifier import classify_message
-from app.ai_scoring import score_message_confidence, generate_narrative
+from app.ai_scoring import generate_narrative
 
 from app.db.session import engine, SessionLocal, Base
 from app.db.models import Message
@@ -52,7 +52,7 @@ s3 = boto3.client(
 )
 
 
-# ── helpers ──────────────────────────────────────────────────────────────────
+# ── helpers ───────────────────────────────────────────────────────────────────
 
 def message_to_dict(m: Message) -> dict:
     return {
@@ -129,13 +129,8 @@ def create_message(message: MessageIn):
 
         safe_text = message.text or ""
 
-        # Step 1: keyword classification
+        # Keyword-only classification — no AI on ingest
         classification = classify_message(safe_text)
-
-        # Step 2: AI confidence scoring + field correction (only if there's meaningful text)
-        if safe_text.strip() and len(safe_text.strip()) >= 50:
-            ai_overrides = score_message_confidence(safe_text, classification)
-            classification.update(ai_overrides)
 
         print("CLASSIFICATION:", classification)
 
@@ -164,7 +159,7 @@ def create_message(message: MessageIn):
             actor_primary=classification.get("actor_primary"),
             claim_status=classification.get("claim_status"),
             confidence=classification.get("confidence"),
-            confidence_reason=classification.get("confidence_reason"),
+            confidence_reason=None,
             matched_terms=classification.get("matched_terms"),
             posted_at=message.posted_at,
         )
@@ -236,13 +231,6 @@ def get_narratives(
     """
     db = SessionLocal()
     try:
-        from sqlalchemy import func as sqlfunc
-
-        cutoff_sql = text(
-            "SELECT * FROM messages WHERE collected_at >= NOW() - INTERVAL ':hours hours' ORDER BY id DESC LIMIT 300"
-        )
-        # Use ORM instead for portability
-        from datetime import timedelta
         cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
 
         q = db.query(Message).filter(Message.collected_at >= cutoff).order_by(Message.id.desc()).limit(300)
@@ -277,9 +265,7 @@ def get_narratives(
 
 
 @app.post("/narratives/custom")
-def get_custom_narrative(
-    message_ids: list[int],
-):
+def get_custom_narrative(message_ids: list[int]):
     """Generate a narrative for a specific set of message IDs."""
     if len(message_ids) > 60:
         raise HTTPException(status_code=400, detail="Max 60 messages per custom narrative")
