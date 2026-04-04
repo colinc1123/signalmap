@@ -2,51 +2,178 @@ import re
 
 
 COUNTRY_KEYWORDS = {
-    "Iran": ["iran", "tehran", "isfahan", "tabriz", "mashhad"],
-    "Israel": ["israel", "tel aviv", "jerusalem", "haifa"],
-    "Gaza": ["gaza"],
-    "Lebanon": ["lebanon", "beirut"],
-    "Syria": ["syria", "damascus", "aleppo"],
-    "Ukraine": ["ukraine", "kyiv", "kiev", "kharkiv", "odesa", "odessa"],
-    "Russia": ["russia", "moscow", "belgorod", "kursk", "rostov"],
-    "Yemen": ["yemen", "sanaa", "houthi", "houthis"],
-    "Iraq": ["iraq", "baghdad"],
+    # Middle East
+    "Iran": ["iran", "tehran", "isfahan", "tabriz", "mashhad", "shiraz", "ahvaz", "iranian"],
+    "Israel": ["israel", "tel aviv", "jerusalem", "haifa", "netanya", "beersheba", "israeli", "idf"],
+    "Gaza": ["gaza", "rafah", "khan yunis", "beit lahiya", "jabalia", "deir al-balah"],
+    "Lebanon": ["lebanon", "beirut", "tyre", "sidon", "tripoli", "baalbek", "lebanese"],
+    "Syria": ["syria", "damascus", "aleppo", "homs", "idlib", "deir ez-zor", "raqqa", "latakia", "syrian"],
+    "Yemen": ["yemen", "sanaa", "aden", "hodeidah", "taiz", "marib", "yemeni"],
+    "Iraq": ["iraq", "baghdad", "basra", "mosul", "erbil", "kirkuk", "fallujah", "ramadi", "iraqi"],
+    "Jordan": ["jordan", "amman", "zarqa", "jordanian"],
+    "Saudi Arabia": ["saudi arabia", "riyadh", "jeddah", "mecca", "medina", "saudi"],
+    "Egypt": ["egypt", "cairo", "alexandria", "sinai", "egyptian"],
+    "Turkey": ["turkey", "ankara", "istanbul", "izmir", "turkish"],
+    "Qatar": ["qatar", "doha", "qatari"],
+    "UAE": ["uae", "dubai", "abu dhabi", "united arab emirates"],
+    "Pakistan": ["pakistan", "islamabad", "karachi", "lahore", "peshawar", "pakistani"],
+    "Afghanistan": ["afghanistan", "kabul", "kandahar", "helmand", "afghan"],
+    # Eastern Europe
+    "Ukraine": ["ukraine", "kyiv", "kiev", "kharkiv", "odesa", "odessa", "lviv", "zaporizhzhia",
+                "mariupol", "kherson", "mykolaiv", "dnipro", "sumy", "ukrainian"],
+    "Russia": ["russia", "moscow", "belgorod", "kursk", "rostov", "st petersburg", "bryansk",
+               "voronezh", "saratov", "russian", "kremlin"],
+    "Belarus": ["belarus", "minsk", "belarusian"],
+    "Moldova": ["moldova", "chisinau", "transnistria"],
+    "Georgia": ["georgia", "tbilisi", "abkhazia", "south ossetia"],
+    # Asia-Pacific
+    "China": ["china", "beijing", "shanghai", "taipei", "hong kong", "chinese", "pla"],
+    "Taiwan": ["taiwan", "taipei", "kaohsiung", "taiwanese"],
+    "North Korea": ["north korea", "pyongyang", "dprk", "kim jong", "korean peninsula"],
+    "South Korea": ["south korea", "seoul", "busan"],
+    "Japan": ["japan", "tokyo", "osaka", "japanese"],
+    "India": ["india", "new delhi", "mumbai", "kashmir", "indian"],
+    "Myanmar": ["myanmar", "burma", "naypyidaw", "yangon", "rakhine"],
+    # Africa
+    "Sudan": ["sudan", "khartoum", "darfur", "sudanese", "rsf", "sat"],
+    "Somalia": ["somalia", "mogadishu", "al-shabaab", "somali"],
+    "Ethiopia": ["ethiopia", "addis ababa", "tigray", "amhara", "ethiopian"],
+    "Mali": ["mali", "bamako", "malian"],
+    "Niger": ["niger", "niamey"],
+    "Libya": ["libya", "tripoli", "benghazi", "libyan"],
+    "Nigeria": ["nigeria", "abuja", "boko haram", "nigerian"],
+    "DRC": ["congo", "drc", "kinshasa", "goma", "m23"],
+    # Americas
+    "Venezuela": ["venezuela", "caracas", "venezuelan"],
+    "Colombia": ["colombia", "bogota", "colombian", "farc"],
+    "Haiti": ["haiti", "port-au-prince", "haitian"],
 }
 
 WEAPON_KEYWORDS = {
-    "ballistic_missile": ["ballistic missile", "ballistic missiles"],
-    "cruise_missile": ["cruise missile", "cruise missiles"],
-    "uav": ["uav", "uavs", "drone", "drones"],
-    "loitering_munition": ["loitering munition", "loitering munitions", "shahed", "kamikaze drone"],
-    "rocket": ["rocket", "rockets"],
-    "artillery": ["artillery", "shelling", "howitzer"],
-    "airstrike": ["airstrike", "air strike", "fighter jet", "fighter jets"],
+    "ballistic_missile": [
+        "ballistic missile", "ballistic missiles", "icbm", "irbm", "mrbm", "srbm",
+        "scud", "iskander", "hwasong", "shahab", "fateh", "zolfaghar",
+        "kinzhal", "hypersonic missile", "fattah",
+    ],
+    "cruise_missile": [
+        "cruise missile", "cruise missiles", "kalibr", "tomahawk", "storm shadow",
+        "scalp", "taurus", "kh-101", "kh-55", "kh-22", "x-101",
+    ],
+    "uav": [
+        "uav", "uavs", "drone", "drones", "unmanned aerial", "quadcopter",
+        "fpv drone", "reconnaissance drone", "tb2", "bayraktar", "mohajer",
+        "ababil", "wing loong", "akinci",
+    ],
+    "loitering_munition": [
+        "loitering munition", "loitering munitions", "shahed", "shahed-136",
+        "shahed-131", "geran", "kamikaze drone", "switchblade", "lancet",
+        "harpy", "harop", "warmate",
+    ],
+    "rocket": [
+        "rocket", "rockets", "rocket fire", "rocket attack", "grad", "mlrs",
+        "himars", "m270", "uragan", "smerch", "fajr", "qassam", "mortar",
+    ],
+    "artillery": [
+        "artillery", "shelling", "howitzer", "cannon fire", "d-30", "d-20",
+        "m777", "caesar", "pzh 2000", "m109", "2s19", "msta", "tube artillery",
+        "tank fire", "direct fire",
+    ],
+    "airstrike": [
+        "airstrike", "air strike", "airstrikes", "air strikes", "fighter jet",
+        "fighter jets", "f-16", "f-35", "su-34", "su-35", "mig-29", "su-24",
+        "bombing run", "air raid", "warplane", "jet aircraft", "sorties",
+    ],
+    "naval": [
+        "naval strike", "missile boat", "warship", "frigate", "destroyer",
+        "submarine", "naval drone", "sea drone", "usv", "naval blockade",
+    ],
+    "ieds": [
+        "ied", "ieds", "roadside bomb", "car bomb", "vbied", "improvised explosive",
+        "suicide bomb", "suicide vest",
+    ],
+    "air_defense": [
+        "s-300", "s-400", "patriot", "iron dome", "david's sling", "arrow",
+        "buk", "tor", "pantsir", "nasams", "iris-t", "c-300", "c-400",
+    ],
+    "cyber": [
+        "cyberattack", "cyber attack", "ddos", "malware", "ransomware",
+        "hacking", "data breach", "infrastructure hack",
+    ],
+    "chemical": [
+        "chemical weapon", "chlorine", "sarin", "novichok", "chemical attack",
+        "toxic agent", "cbrn",
+    ],
 }
 
 CLAIM_STATUS_KEYWORDS = {
-    "denied": ["denied", "rejects", "rejected"],
-    "disputed": ["disputed", "conflicting reports"],
-    "claimed": ["claimed", "claim", "announced"],
-    "unverified": ["reportedly", "unconfirmed", "allegedly", "reports say"],
+    "denied": ["denied", "rejects", "rejected", "denies", "refutes", "false claim", "fabricated"],
+    "disputed": ["disputed", "conflicting reports", "contradicts", "unconfirmed by", "contested"],
+    "claimed": ["claimed", "claim", "announced", "takes responsibility", "declares"],
+    "confirmed": ["confirmed", "verified", "official statement", "acknowledges", "admits"],
+    "unverified": ["reportedly", "unconfirmed", "allegedly", "reports say", "according to sources",
+                   "sources claim", "believed to", "appears to", "said to have"],
 }
 
 TARGET_TYPE_KEYWORDS = {
-    "military_base": ["base", "military base", "airbase", "air base"],
-    "airport": ["airport"],
-    "energy_infrastructure": ["oil facility", "refinery", "gas field", "power plant"],
-    "government_building": ["government building", "ministry"],
-    "residential_area": ["residential", "apartment", "neighborhood"],
-    "port": ["port", "harbor", "harbour"],
-    "convoy": ["convoy"],
+    "military_base": ["base", "military base", "airbase", "air base", "barracks", "garrison",
+                      "military installation", "weapons depot", "ammo depot", "command post"],
+    "airport": ["airport", "airfield", "runway", "air strip"],
+    "energy_infrastructure": ["oil facility", "refinery", "gas field", "power plant", "pipeline",
+                               "substation", "energy infrastructure", "oil depot", "fuel depot"],
+    "government_building": ["government building", "ministry", "parliament", "presidential",
+                             "administrative", "headquarters", "state building"],
+    "residential_area": ["residential", "apartment", "neighborhood", "village", "civilian area",
+                          "civilian home", "school", "hospital", "market"],
+    "port": ["port", "harbor", "harbour", "naval base", "naval port", "dock"],
+    "convoy": ["convoy", "military convoy", "supply convoy", "troop convoy", "vehicle column"],
+    "bridge": ["bridge", "crossing", "overpass"],
+    "radar": ["radar", "radar station", "air defense radar", "early warning"],
+    "naval_vessel": ["warship", "naval vessel", "patrol boat", "frigate", "destroyer", "submarine"],
+    "border": ["border crossing", "checkpoint", "border post", "frontier"],
 }
 
 ACTOR_KEYWORDS = {
-    "IRGC": ["irgc", "islamic revolutionary guard corps"],
-    "IDF": ["idf", "israeli defense forces"],
-    "Hezbollah": ["hezbollah"],
-    "Houthis": ["houthi", "houthis"],
-    "Russian MoD": ["russian mod", "russian ministry of defense"],
-    "Ukrainian Air Force": ["ukrainian air force"],
+    # State actors
+    "IRGC": ["irgc", "islamic revolutionary guard", "revolutionary guard", "quds force"],
+    "IDF": ["idf", "israeli defense forces", "israeli military", "israeli air force", "iaf"],
+    "Russian MoD": ["russian mod", "russian ministry of defense", "russian armed forces",
+                    "russian military", "russian army", "russian forces"],
+    "Ukrainian Armed Forces": ["ukrainian armed forces", "ukrainian military", "zsu",
+                                "ukrainian army", "ukraine forces", "ukrainian air force"],
+    "US Military": ["us military", "pentagon", "centcom", "usaf", "us army", "us forces",
+                    "american forces", "us navy"],
+    "NATO": ["nato", "alliance forces", "nato forces"],
+    "PLA": ["pla", "peoples liberation army", "chinese military", "chinese forces"],
+    "Indian Army": ["indian army", "indian military", "indian air force"],
+    "Pakistani Military": ["pakistani military", "pakistan army", "ispr"],
+    # Non-state / militant
+    "Hezbollah": ["hezbollah", "hizballah", "islamic resistance in lebanon"],
+    "Houthis": ["houthi", "houthis", "ansarallah", "ansar allah", "yemeni forces"],
+    "Hamas": ["hamas", "qassam brigades", "al-qassam", "izz ad-din"],
+    "Islamic Jihad": ["islamic jihad", "al-quds brigades"],
+    "ISIS": ["isis", "isil", "islamic state", "daesh"],
+    "Al-Qaeda": ["al-qaeda", "al qaeda", "aq affiliate"],
+    "Wagner/Africa Corps": ["wagner", "africa corps", "pmc wagner", "russian mercenaries"],
+    "HTS": ["hts", "hayat tahrir al-sham", "jabhat al-nusra"],
+    "RSF": ["rsf", "rapid support forces", "sudanese paramilitaries"],
+    "Al-Shabaab": ["al-shabaab", "al shabaab", "harakat al-shabaab"],
+    "Kurds/SDF": ["sdf", "ypg", "pkk", "kurdish forces", "syrian democratic forces"],
+}
+
+REGION_MAP = {
+    "Middle East": ["Iran", "Israel", "Gaza", "Lebanon", "Syria", "Yemen", "Iraq",
+                    "Jordan", "Saudi Arabia", "Egypt", "Turkey", "Qatar", "UAE"],
+    "Eastern Europe": ["Ukraine", "Russia", "Belarus", "Moldova", "Georgia"],
+    "Central Asia": ["Afghanistan", "Pakistan"],
+    "Asia-Pacific": ["China", "Taiwan", "North Korea", "South Korea", "Japan", "India", "Myanmar"],
+    "Africa": ["Sudan", "Somalia", "Ethiopia", "Mali", "Niger", "Libya", "Nigeria", "DRC"],
+    "Americas": ["Venezuela", "Colombia", "Haiti"],
+}
+
+COUNTRY_TO_REGION = {
+    country: region
+    for region, countries in REGION_MAP.items()
+    for country in countries
 }
 
 
@@ -59,7 +186,7 @@ def normalize_text(text: str) -> str:
     return cleaned
 
 
-def find_first_match(text: str, mapping: dict[str, list[str]]):
+def find_first_match(text: str, mapping: dict):
     for label, keywords in mapping.items():
         for keyword in keywords:
             if keyword in text:
@@ -67,12 +194,20 @@ def find_first_match(text: str, mapping: dict[str, list[str]]):
     return None, None
 
 
+def find_all_matches(text: str, mapping: dict) -> list:
+    found = []
+    for label, keywords in mapping.items():
+        for keyword in keywords:
+            if keyword in text:
+                found.append(label)
+                break
+    return found
+
+
 def infer_region(country: str | None) -> str | None:
-    if country in ["Iran", "Israel", "Gaza", "Lebanon", "Syria", "Yemen", "Iraq"]:
-        return "Middle East"
-    if country in ["Ukraine", "Russia"]:
-        return "Eastern Europe"
-    return None
+    if not country:
+        return None
+    return COUNTRY_TO_REGION.get(country)
 
 
 def classify_message(text: str) -> dict:
@@ -99,23 +234,28 @@ def classify_message(text: str) -> dict:
     if actor_term:
         matched_terms.append(actor_term)
 
+    # Event domain / type / subtype
     event_domain = None
     event_type = None
     event_subtype = None
 
-    if "intercept" in normalized or "air defense" in normalized or "air defence" in normalized:
+    if "intercept" in normalized or "air defense" in normalized or "air defence" in normalized or "shot down" in normalized:
         event_domain = "air_defense"
         event_type = "interception"
         event_subtype = "air_defense_intercept"
-    elif "ceasefire" in normalized or "talks" in normalized or "negotiation" in normalized or "mediators" in normalized:
+    elif "ceasefire" in normalized or "talks" in normalized or "negotiation" in normalized or "mediators" in normalized or "peace deal" in normalized:
         event_domain = "political_diplomatic"
         event_type = "negotiation"
         event_subtype = "ceasefire_talks"
-    elif "explosion" in normalized or "blast" in normalized:
+    elif "sanction" in normalized or "sanctions" in normalized:
+        event_domain = "political_diplomatic"
+        event_type = "sanctions"
+        event_subtype = "sanctions_announcement"
+    elif "explosion" in normalized or "blast" in normalized or "detonation" in normalized:
         event_domain = "kinetic"
         event_type = "explosion"
         event_subtype = "explosion_report"
-    elif "troop" in normalized or "convoy" in normalized or "deployment" in normalized:
+    elif "troop" in normalized or "convoy" in normalized or "deployment" in normalized or "mobilization" in normalized:
         event_domain = "kinetic"
         event_type = "movement"
         event_subtype = "troop_movement"
@@ -135,11 +275,24 @@ def classify_message(text: str) -> dict:
         event_domain = "kinetic"
         event_type = "strike"
         event_subtype = "fires_report"
+    elif weapon_type == "naval":
+        event_domain = "kinetic"
+        event_type = "strike"
+        event_subtype = "naval_strike"
+    elif weapon_type == "cyber":
+        event_domain = "cyber"
+        event_type = "attack"
+        event_subtype = "cyberattack"
+    elif weapon_type == "ieds":
+        event_domain = "kinetic"
+        event_type = "strike"
+        event_subtype = "ied_attack"
     elif "said" in normalized or "stated" in normalized or "announced" in normalized:
         event_domain = "political_diplomatic"
         event_type = "statement"
         event_subtype = "official_statement"
 
+    # Keyword-only confidence — will be overridden by AI scoring on ingest
     confidence = "low"
     if country and event_type:
         confidence = "medium"
@@ -155,7 +308,7 @@ def classify_message(text: str) -> dict:
         "weapon_type": weapon_type,
         "target_type": target_type,
         "actor_primary": actor_primary,
-        "claim_status": claim_status or "confirmed",
+        "claim_status": claim_status or "unverified",
         "confidence": confidence,
         "matched_terms": ", ".join(matched_terms) if matched_terms else None,
     }

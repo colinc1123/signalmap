@@ -18,7 +18,6 @@ class Message(Base):
     media_object_key = Column(String, nullable=True)
 
     region = Column(String, nullable=True)
-    region = Column(String, nullable=True)
     country = Column(String, nullable=True)
     event_domain = Column(String, nullable=True)
     event_type = Column(String, nullable=True)
@@ -28,6 +27,7 @@ class Message(Base):
     actor_primary = Column(String, nullable=True)
     claim_status = Column(String, nullable=True)
     confidence = Column(String, nullable=True)
+    confidence_reason = Column(String, nullable=True)   # AI-generated explanation
     matched_terms = Column(String, nullable=True)
 
     posted_at = Column(DateTime(timezone=True), nullable=True)
