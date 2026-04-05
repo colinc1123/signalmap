@@ -1,7 +1,8 @@
 import os
 import mimetypes
 import tempfile
-import time
+import signal
+import sys
 from pathlib import Path
 
 import boto3
@@ -55,6 +56,16 @@ s3 = boto3.client(
 client = TelegramClient(StringSession(string_session), int(api_id), api_hash)
 
 
+def handle_shutdown(signum, frame):
+    print("Received shutdown signal, disconnecting Telegram client...")
+    client.disconnect()
+    sys.exit(0)
+
+
+signal.signal(signal.SIGTERM, handle_shutdown)
+signal.signal(signal.SIGINT, handle_shutdown)
+
+
 def detect_media_type(message) -> str | None:
     if not message.media:
         return None
@@ -83,6 +94,7 @@ def upload_file_to_bucket(local_path: str, object_key: str) -> None:
         extra_args["ContentType"] = content_type
 
     s3.upload_file(local_path, AWS_S3_BUCKET_NAME, object_key, ExtraArgs=extra_args)
+
 
 @client.on(events.NewMessage)
 async def handler(event):
@@ -190,19 +202,8 @@ async def main():
         print("FATAL: Telegram session is invalid or duplicated.")
         print(f"Error: {e}")
         print()
-        print("This happens when the same session string is used from")
-        print("two different locations simultaneously (e.g. local + Railway).")
-        print()
-        print("To fix:")
-        print("  1. Stop any local instance of the collector")
-        print("  2. Re-generate the session string by running:")
-        print("       python generate_string_session.py")
-        print("  3. Update TELEGRAM_STRING_SESSION in Railway env vars")
-        print("  4. Redeploy")
+        print("Re-generate TELEGRAM_STRING_SESSION and redeploy.")
         print("=" * 60 + "\n")
-        # Exit with code 1 so Railway marks the deploy as failed
-        # rather than crash-looping indefinitely
-        import sys
         sys.exit(1)
 
     print("Telegram collector connected.")
@@ -210,8 +211,6 @@ async def main():
     await client.run_until_disconnected()
 
 
-# Wrap in try/except so a duplicated-key error during the sync
-# `with client:` context manager is also caught cleanly.
 try:
     with client:
         client.loop.run_until_complete(main())
@@ -222,7 +221,6 @@ except (AuthKeyDuplicatedError, AuthKeyUnregisteredError) as e:
     print()
     print("Re-generate TELEGRAM_STRING_SESSION and redeploy.")
     print("=" * 60 + "\n")
-    import sys
     sys.exit(1)
 except KeyboardInterrupt:
     print("Collector stopped by user.")
