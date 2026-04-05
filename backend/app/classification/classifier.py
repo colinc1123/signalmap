@@ -33,9 +33,13 @@ COUNTRY_KEYWORDS = {
     "Afghanistan": ["afghanistan", "kabul", "kandahar", "helmand", "afghan", "taliban"],
     # Eastern Europe
     "Ukraine": ["ukraine", "kyiv", "kiev", "kharkiv", "odesa", "odessa", "lviv",
-                "zaporizhzhia", "mariupol", "kherson", "mykolaiv", "dnipro", "sumy", "ukrainian"],
+                "zaporizhzhia", "mariupol", "kherson", "mykolaiv", "dnipro", "sumy", "ukrainian",
+                "azov", "donbas", "donbass", "luhansk", "donetsk", "bakhmut", "avdiivka",
+                "zaporizhia", "kurakhove", "toretsk", "chasiv yar"],
     "Russia": ["russia", "moscow", "belgorod", "kursk", "rostov", "st petersburg",
-               "bryansk", "voronezh", "saratov", "russian", "kremlin", "putin"],
+               "bryansk", "voronezh", "saratov", "russian", "kremlin", "putin", "russian forces",
+               "russian army", "russian military", "russian troops", "russian mod",
+               "russian ministry", "gerasimov", "shoigu", "russian federation"],
     "Belarus": ["belarus", "minsk", "belarusian", "lukashenko"],
     "Moldova": ["moldova", "chisinau", "transnistria"],
     "Georgia": ["georgia", "tbilisi", "abkhazia", "south ossetia"],
@@ -56,16 +60,34 @@ COUNTRY_KEYWORDS = {
     "Libya": ["libya", "tripoli", "benghazi", "libyan"],
     "Nigeria": ["nigeria", "abuja", "boko haram", "nigerian"],
     "DRC": ["congo", "drc", "kinshasa", "goma", "m23"],
-    # Americas
-    "United States": ["trump", "white house", "pentagon", "washington d.c", "washington dc",
-                      "us president", "american president", "secretary of state",
-                      "centcom", "us military", "us forces", "american forces",
-                      "us navy", "us air force", "us army", "f-15e", "f-15",
-                      "black hawk", "pave hawk", "csar", "us pilots", "us pilot",
-                      "truth social", "25th amendment"],
+    # Americas — US has many keywords since it's often referenced globally
+    "United States": [
+        # Political / executive
+        "trump", "white house", "pentagon", "washington d.c", "washington dc",
+        "us president", "american president", "secretary of state", "secretary of defense",
+        "national security council", "state department", "department of defense",
+        "oval office", "joint chiefs", "us congress", "senate", "house of representatives",
+        # Military
+        "centcom", "us military", "us forces", "american forces",
+        "us navy", "us air force", "us army", "us marines", "us special forces",
+        "f-15e", "f-15", "f-16", "f-35", "b-52", "b-2",
+        "black hawk", "pave hawk", "csar", "us pilots", "us pilot",
+        "aircraft carrier", "uss ", "destroyer uss", "guided missile",
+        # Intelligence / policy
+        "cia", "nsa", "fbi", "homeland security", "dhs",
+        "truth social", "25th amendment",
+        # Domestic
+        "florida", "texas", "california", "new york", "chicago",
+        "tariffs", "us sanctions", "american sanctions",
+    ],
     "Venezuela": ["venezuela", "caracas", "venezuelan", "maduro"],
     "Colombia": ["colombia", "bogota", "colombian", "farc"],
     "Haiti": ["haiti", "port-au-prince", "haitian"],
+    "Mexico": ["mexico", "mexico city", "mexican", "cartel"],
+    "Cuba": ["cuba", "havana", "cuban", "castro"],
+    "Brazil": ["brazil", "brasilia", "brazilian", "lula"],
+    "Argentina": ["argentina", "buenos aires", "argentinian"],
+    "Canada": ["canada", "ottawa", "canadian"],
 }
 
 WEAPON_KEYWORDS = {
@@ -197,7 +219,8 @@ REGION_MAP = {
     "Central Asia": ["Afghanistan", "Pakistan"],
     "Asia-Pacific": ["China", "Taiwan", "North Korea", "South Korea", "Japan", "India", "Myanmar"],
     "Africa": ["Sudan", "Somalia", "Ethiopia", "Mali", "Niger", "Libya", "Nigeria", "DRC"],
-    "Americas": ["United States", "Venezuela", "Colombia", "Haiti"],
+    "Americas": ["United States", "Venezuela", "Colombia", "Haiti", "Mexico", "Cuba", "Brazil",
+                 "Argentina", "Canada"],
 }
 
 COUNTRY_TO_REGION = {
@@ -281,6 +304,10 @@ def classify_message(text: str) -> dict:
         event_domain = "political_diplomatic"
         event_type = "sanctions"
         event_subtype = "sanctions_announcement"
+    elif "tariff" in normalized or "tariffs" in normalized or "trade war" in normalized:
+        event_domain = "political_diplomatic"
+        event_type = "economic"
+        event_subtype = "trade_policy"
     elif "explosion" in normalized or "blast" in normalized or "detonation" in normalized:
         event_domain = "kinetic"
         event_type = "explosion"

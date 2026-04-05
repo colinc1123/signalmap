@@ -1,6 +1,7 @@
 import os
 import mimetypes
 import tempfile
+import time
 from pathlib import Path
 
 import boto3
@@ -8,6 +9,7 @@ import requests
 from dotenv import load_dotenv
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
+from telethon.errors import AuthKeyDuplicatedError, AuthKeyUnregisteredError
 
 load_dotenv()
 
@@ -25,10 +27,8 @@ string_session = os.getenv("TELEGRAM_STRING_SESSION", "")
 if not api_id or not api_hash or not string_session:
     raise ValueError("Missing TELEGRAM_API_ID, TELEGRAM_API_HASH, or TELEGRAM_STRING_SESSION")
 
-# Reuse backend URL for media proxy links
 BACKEND_BASE_URL = signalmap_api_url
 
-# Railway Bucket vars
 AWS_ENDPOINT_URL = os.getenv("AWS_ENDPOINT_URL")
 AWS_S3_BUCKET_NAME = os.getenv("AWS_S3_BUCKET_NAME")
 AWS_DEFAULT_REGION = os.getenv("AWS_DEFAULT_REGION")
@@ -183,11 +183,46 @@ async def handler(event):
 
 
 async def main():
-    await client.start()
+    try:
+        await client.start()
+    except (AuthKeyDuplicatedError, AuthKeyUnregisteredError) as e:
+        print("\n" + "=" * 60)
+        print("FATAL: Telegram session is invalid or duplicated.")
+        print(f"Error: {e}")
+        print()
+        print("This happens when the same session string is used from")
+        print("two different locations simultaneously (e.g. local + Railway).")
+        print()
+        print("To fix:")
+        print("  1. Stop any local instance of the collector")
+        print("  2. Re-generate the session string by running:")
+        print("       python generate_string_session.py")
+        print("  3. Update TELEGRAM_STRING_SESSION in Railway env vars")
+        print("  4. Redeploy")
+        print("=" * 60 + "\n")
+        # Exit with code 1 so Railway marks the deploy as failed
+        # rather than crash-looping indefinitely
+        import sys
+        sys.exit(1)
+
     print("Telegram collector connected.")
-    print("Listening for new messages...")
+    print(f"Listening on channels: {TARGET_CHANNELS or 'ALL'}")
     await client.run_until_disconnected()
 
 
-with client:
-    client.loop.run_until_complete(main())
+# Wrap in try/except so a duplicated-key error during the sync
+# `with client:` context manager is also caught cleanly.
+try:
+    with client:
+        client.loop.run_until_complete(main())
+except (AuthKeyDuplicatedError, AuthKeyUnregisteredError) as e:
+    print("\n" + "=" * 60)
+    print("FATAL: Telegram session is invalid or duplicated.")
+    print(f"Error: {e}")
+    print()
+    print("Re-generate TELEGRAM_STRING_SESSION and redeploy.")
+    print("=" * 60 + "\n")
+    import sys
+    sys.exit(1)
+except KeyboardInterrupt:
+    print("Collector stopped by user.")

@@ -7,6 +7,9 @@ Schedule:
   - 12h window: regenerate every 12 hours
   - 24h window: regenerate every 24 hours
   - 48h window: regenerate every 48 hours
+
+Priority regions always get a sitrep (even if signal count is low):
+  Middle East, Eastern Europe, Americas
 """
 
 import asyncio
@@ -23,11 +26,17 @@ log = logging.getLogger("narrative_scheduler")
 WINDOWS = [6, 12, 24, 48]
 MIN_SIGNALS = 3
 
+# These regions always get a sitrep even if signal count is below MIN_SIGNALS
+PRIORITY_REGIONS = {"Middle East", "Eastern Europe", "Americas"}
+# Minimum signals for priority regions (lower threshold)
+MIN_SIGNALS_PRIORITY = 1
+
 
 def _build_narratives_for_window(window_hours: int) -> list[dict]:
     """
     Pull signals from the last window_hours, group by region,
     call Claude for each group, return list of narrative dicts.
+    Priority regions always get a sitrep.
     """
     db = SessionLocal()
     results = []
@@ -60,13 +69,62 @@ def _build_narratives_for_window(window_hours: int) -> list[dict]:
                 "confidence": m.confidence,
             })
 
+        # Ensure all priority regions are present (even with empty signal list)
+        for region in PRIORITY_REGIONS:
+            if region not in by_region:
+                by_region[region] = []
+
         for region, signals in by_region.items():
-            if len(signals) < MIN_SIGNALS:
+            is_priority = region in PRIORITY_REGIONS
+            min_threshold = MIN_SIGNALS_PRIORITY if is_priority else MIN_SIGNALS
+
+            if len(signals) < min_threshold and not is_priority:
                 continue
+
+            # For priority regions with zero signals, generate a "no significant
+            # activity" placeholder rather than calling Claude with nothing
+            if len(signals) == 0 and is_priority:
+                results.append({
+                    "region": region,
+                    "window_hours": window_hours,
+                    "title": f"{region}: No significant activity",
+                    "summary": (
+                        f"No significant signals were detected for the {region} region "
+                        f"in the past {window_hours} hours. This may indicate a quiet "
+                        f"period or a gap in source coverage. Monitor open-source channels "
+                        f"for updates."
+                    ),
+                    "key_actors": json.dumps([]),
+                    "key_locations": json.dumps([]),
+                    "escalation_level": "stable",
+                    "signal_count": 0,
+                    "last_signal_at": None,
+                })
+                continue
+
             log.info(f"Generating narrative: window={window_hours}h region={region} signals={len(signals)}")
             narrative = generate_narrative(signals, region=region)
             if not narrative:
+                # Generate a fallback for priority regions if Claude fails
+                if is_priority:
+                    results.append({
+                        "region": region,
+                        "window_hours": window_hours,
+                        "title": f"{region}: Signals under assessment",
+                        "summary": (
+                            f"Signal processing for {region} encountered an issue during "
+                            f"the {window_hours}-hour window. {len(signals)} signal(s) were "
+                            f"collected but the narrative could not be generated. "
+                            f"Manual review of raw signals is recommended."
+                        ),
+                        "key_actors": json.dumps([]),
+                        "key_locations": json.dumps([]),
+                        "escalation_level": "stable",
+                        "signal_count": len(signals),
+                        "last_signal_at": None,
+                    })
                 continue
+
             results.append({
                 "region": region,
                 "window_hours": window_hours,
@@ -148,7 +206,6 @@ async def scheduler_loop() -> None:
     # Stagger initial runs: 2 min apart so we don't hammer the API on startup
     stagger_seconds = 0
     for window in WINDOWS:
-        # Schedule first run after stagger
         last_run[window] = datetime.now(timezone.utc) - timedelta(hours=window) + timedelta(seconds=stagger_seconds)
         stagger_seconds += 120  # 2 minutes between each window's first run
 
