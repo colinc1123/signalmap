@@ -29,14 +29,17 @@ type MessageItem = {
 };
 
 type Narrative = {
+  id: number;
   region: string;
+  window_hours: number;
   title: string;
   summary: string;
   key_actors: string[];
   key_locations: string[];
   escalation_level: "stable" | "elevated" | "high" | "critical";
-  last_updated: string;
   signal_count: number;
+  last_signal_at: string | null;
+  generated_at: string | null;
 };
 
 function formatTime(value: string | null) {
@@ -115,14 +118,11 @@ function Tag({ label, value, color }: { label: string; value: string | null; col
   );
 }
 
-function ConfidenceMeter({ level, reason }: { level: string | null; reason?: string | null }) {
+function ConfidenceMeter({ level }: { level: string | null }) {
   const bars = ["low", "medium", "high"];
   const idx = bars.indexOf(level ?? "");
   return (
-    <span
-      title={reason ?? `Confidence: ${level ?? "unknown"}`}
-      style={{ display: "inline-flex", gap: 2, alignItems: "flex-end", cursor: reason ? "help" : "default" }}
-    >
+    <span style={{ display: "inline-flex", gap: 2, alignItems: "flex-end" }}>
       {bars.map((b, i) => (
         <span key={b} style={{
           width: 9, height: i === 0 ? 5 : i === 1 ? 8 : 11, borderRadius: 2,
@@ -191,51 +191,49 @@ function NarrativeCard({ narrative }: { narrative: Narrative }) {
   return (
     <div style={{
       background: "rgba(255,255,255,0.03)", border: `1px solid ${color}33`,
-      borderLeft: `3px solid ${color}`, borderRadius: 6,
-      padding: "14px 16px", marginBottom: 10,
+      borderLeft: `3px solid ${color}`, borderRadius: 6, padding: "14px 16px", marginBottom: 10,
     }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
-            <span style={{
-              fontFamily: "'IBM Plex Mono', monospace", fontSize: 9,
-              letterSpacing: "0.16em", textTransform: "uppercase",
-              color, background: `${color}20`, border: `1px solid ${color}40`,
-              padding: "2px 7px", borderRadius: 3,
-            }}>
-              {narrative.escalation_level}
-            </span>
-            <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: "rgba(255,255,255,0.35)" }}>
-              {narrative.region}
-            </span>
-            <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: "rgba(255,255,255,0.2)" }}>
-              · {narrative.signal_count} signals · {formatTime(narrative.last_updated)}
-            </span>
-          </div>
-          <h3 style={{ fontSize: 14, fontWeight: 700, color: "#fff", lineHeight: 1.3, marginBottom: 8 }}>
-            {narrative.title}
-          </h3>
-          <p style={{
-            fontSize: 12, lineHeight: 1.7, color: "rgba(255,255,255,0.65)",
-            fontFamily: "'Syne', sans-serif",
-            display: expanded ? "block" : "-webkit-box",
-            WebkitLineClamp: expanded ? undefined : 3,
-            WebkitBoxOrient: "vertical" as const,
-            overflow: expanded ? "visible" : "hidden",
-          }}>
-            {narrative.summary}
-          </p>
-          {narrative.summary.length > 200 && (
-            <button onClick={() => setExpanded(!expanded)} style={{
-              fontFamily: "'IBM Plex Mono', monospace", fontSize: 10,
-              color: "#60a5fa", background: "none", border: "none",
-              cursor: "pointer", marginTop: 4, letterSpacing: "0.04em",
-            }}>
-              {expanded ? "collapse ↑" : "read more ↓"}
-            </button>
-          )}
-        </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
+        <span style={{
+          fontFamily: "'IBM Plex Mono', monospace", fontSize: 9,
+          letterSpacing: "0.16em", textTransform: "uppercase",
+          color, background: `${color}20`, border: `1px solid ${color}40`,
+          padding: "2px 7px", borderRadius: 3,
+        }}>
+          {narrative.escalation_level}
+        </span>
+        <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: "rgba(255,255,255,0.35)" }}>
+          {narrative.region}
+        </span>
+        <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: "rgba(255,255,255,0.2)" }}>
+          · {narrative.signal_count} signals · updated {formatTime(narrative.generated_at)}
+        </span>
       </div>
+
+      <h3 style={{ fontSize: 14, fontWeight: 700, color: "#fff", lineHeight: 1.3, marginBottom: 8 }}>
+        {narrative.title}
+      </h3>
+
+      <p style={{
+        fontSize: 12, lineHeight: 1.7, color: "rgba(255,255,255,0.65)",
+        fontFamily: "'Syne', sans-serif",
+        display: expanded ? "block" : "-webkit-box",
+        WebkitLineClamp: expanded ? undefined : 3,
+        WebkitBoxOrient: "vertical" as const,
+        overflow: expanded ? "visible" : "hidden",
+      }}>
+        {narrative.summary}
+      </p>
+
+      {narrative.summary.length > 200 && (
+        <button onClick={() => setExpanded(!expanded)} style={{
+          fontFamily: "'IBM Plex Mono', monospace", fontSize: 10,
+          color: "#60a5fa", background: "none", border: "none",
+          cursor: "pointer", marginTop: 4, letterSpacing: "0.04em",
+        }}>
+          {expanded ? "collapse ↑" : "read more ↓"}
+        </button>
+      )}
 
       {expanded && (
         <div style={{ marginTop: 12, display: "flex", gap: 16, flexWrap: "wrap" }}>
@@ -275,7 +273,7 @@ export default function SignalMap() {
   const [narratives, setNarratives] = useState<Narrative[]>([]);
   const [narrativesLoading, setNarrativesLoading] = useState(false);
   const [narrativesError, setNarrativesError] = useState("");
-  const [narrativeHours, setNarrativeHours] = useState(24);
+  const [narrativeWindow, setNarrativeWindow] = useState(24);
 
   const fetchFeed = useCallback(async () => {
     try {
@@ -298,11 +296,11 @@ export default function SignalMap() {
     return () => clearInterval(iv);
   }, [fetchFeed]);
 
-  const fetchNarratives = useCallback(async () => {
+  const fetchNarratives = useCallback(async (window: number) => {
     setNarrativesLoading(true);
     setNarrativesError("");
     try {
-      const res = await fetch(`${API_BASE}/narratives?hours=${narrativeHours}`, { cache: "no-store" });
+      const res = await fetch(`${API_BASE}/narratives?window_hours=${window}`, { cache: "no-store" });
       if (!res.ok) throw new Error(`API ${res.status}`);
       const data = await res.json();
       setNarratives(data.narratives ?? []);
@@ -311,7 +309,14 @@ export default function SignalMap() {
     } finally {
       setNarrativesLoading(false);
     }
-  }, [narrativeHours]);
+  }, []);
+
+  // Load narratives when tab opens or window changes
+  useEffect(() => {
+    if (activeTab === "narratives") {
+      fetchNarratives(narrativeWindow);
+    }
+  }, [activeTab, narrativeWindow, fetchNarratives]);
 
   const setFilter = useCallback(
     (field: keyof FilterState, val: string) => setFilters((f) => ({ ...f, [field]: val })),
@@ -403,7 +408,7 @@ export default function SignalMap() {
                   background: activeTab === tab ? "rgba(59,130,246,0.2)" : "transparent",
                   border: activeTab === tab ? "1px solid rgba(59,130,246,0.3)" : "1px solid transparent",
                 }}>
-                  {tab === "feed" ? `Feed (${filteredItems.length})` : "Narratives"}
+                  {tab === "feed" ? `Feed (${filteredItems.length})` : "SitReps"}
                 </button>
               ))}
             </div>
@@ -417,9 +422,7 @@ export default function SignalMap() {
                 <span style={{ color: error ? "#ef4444" : "rgba(255,255,255,0.4)" }}>{error ? "DEGRADED" : "LIVE"}</span>
               </div>
               {lastUpdate && (
-                <span style={{ color: "rgba(255,255,255,0.2)" }}>
-                  {lastUpdate.toLocaleTimeString()}
-                </span>
+                <span style={{ color: "rgba(255,255,255,0.2)" }}>{lastUpdate.toLocaleTimeString()}</span>
               )}
             </div>
           </div>
@@ -454,7 +457,6 @@ export default function SignalMap() {
                 options={["high", "medium", "low"].filter((c) => items.some((i) => i.confidence === c))}
                 value={filters.confidence} onChange={setFilter} />
 
-              {/* Stats */}
               <div style={{ marginTop: 4, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.05)", display: "flex", flexDirection: "column", gap: 5 }}>
                 {[
                   { label: "Kinetic", val: domainCounts.kinetic, color: "#ef4444" },
@@ -515,7 +517,7 @@ export default function SignalMap() {
                             </>}
                           </div>
                           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <ConfidenceMeter level={item.confidence} reason={item.confidence_reason} />
+                            <ConfidenceMeter level={item.confidence} />
                             <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, color: "rgba(255,255,255,0.22)" }}>
                               {formatTime(item.posted_at ?? item.collected_at)}
                             </span>
@@ -564,34 +566,31 @@ export default function SignalMap() {
               </>
             )}
 
-            {/* ── NARRATIVES TAB ── */}
+            {/* ── SITREPS TAB ── */}
             {activeTab === "narratives" && (
               <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: "rgba(255,255,255,0.35)" }}>Window:</span>
-                    {[6, 12, 24, 48].map((h) => (
-                      <button key={h} onClick={() => setNarrativeHours(h)} style={{
-                        fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, cursor: "pointer",
-                        padding: "4px 10px", borderRadius: 4,
-                        background: narrativeHours === h ? "rgba(59,130,246,0.2)" : "rgba(255,255,255,0.05)",
-                        border: narrativeHours === h ? "1px solid rgba(59,130,246,0.4)" : "1px solid rgba(255,255,255,0.08)",
-                        color: narrativeHours === h ? "#93c5fd" : "rgba(255,255,255,0.35)",
-                      }}>{h}h</button>
-                    ))}
-                  </div>
-                  <button onClick={fetchNarratives} disabled={narrativesLoading} style={{
-                    fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, cursor: narrativesLoading ? "not-allowed" : "pointer",
-                    padding: "5px 14px", borderRadius: 4, letterSpacing: "0.08em",
-                    background: "rgba(59,130,246,0.15)", border: "1px solid rgba(59,130,246,0.35)",
-                    color: narrativesLoading ? "rgba(255,255,255,0.3)" : "#93c5fd",
-                  }}>
-                    {narrativesLoading ? "GENERATING…" : "GENERATE SITREP"}
-                  </button>
-                  <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, color: "rgba(255,255,255,0.2)" }}>
-                    uses AI · may take 10–20s
+                {/* Window selector */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+                  <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: "rgba(255,255,255,0.35)" }}>Window:</span>
+                  {[6, 12, 24, 48].map((h) => (
+                    <button key={h} onClick={() => setNarrativeWindow(h)} style={{
+                      fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, cursor: "pointer",
+                      padding: "4px 10px", borderRadius: 4,
+                      background: narrativeWindow === h ? "rgba(59,130,246,0.2)" : "rgba(255,255,255,0.05)",
+                      border: narrativeWindow === h ? "1px solid rgba(59,130,246,0.4)" : "1px solid rgba(255,255,255,0.08)",
+                      color: narrativeWindow === h ? "#93c5fd" : "rgba(255,255,255,0.35)",
+                    }}>{h}h</button>
+                  ))}
+                  <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, color: "rgba(255,255,255,0.2)", marginLeft: 8 }}>
+                    auto-updated every {narrativeWindow}h
                   </span>
                 </div>
+
+                {narrativesLoading && (
+                  <div className="card" style={{ padding: 32, textAlign: "center", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: "rgba(255,255,255,0.25)", letterSpacing: "0.1em" }}>
+                    LOADING SITREPS…
+                  </div>
+                )}
 
                 {narrativesError && (
                   <div style={{ padding: "10px 14px", background: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.18)", borderRadius: 5, fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: "#fca5a5", marginBottom: 14 }}>
@@ -601,15 +600,17 @@ export default function SignalMap() {
 
                 {!narrativesLoading && narratives.length === 0 && !narrativesError && (
                   <div className="card" style={{ padding: 40, textAlign: "center" }}>
-                    <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: "rgba(255,255,255,0.2)", letterSpacing: "0.1em", marginBottom: 8 }}>NO SITUATION REPORTS GENERATED</div>
+                    <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: "rgba(255,255,255,0.2)", letterSpacing: "0.1em", marginBottom: 8 }}>
+                      NO SITREPS AVAILABLE YET
+                    </div>
                     <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 12, color: "rgba(255,255,255,0.15)" }}>
-                      Click "Generate SitRep" to run AI analysis across recent signals
+                      The first situation reports will be generated automatically within {narrativeWindow} hours of deployment.
                     </div>
                   </div>
                 )}
 
                 {narratives.map((n) => (
-                  <NarrativeCard key={`${n.region}-${n.title}`} narrative={n} />
+                  <NarrativeCard key={n.id} narrative={n} />
                 ))}
               </div>
             )}
