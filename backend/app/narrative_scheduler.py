@@ -41,10 +41,12 @@ def _build_narratives_for_window(window_hours: int) -> list[dict]:
             .all()
         )
 
-        # Group by region
+        # Group by region — skip signals with no identified region
         by_region: dict[str, list] = {}
         for m in all_msgs:
-            key = m.region or "Unknown"
+            if not m.region:
+                continue
+            key = m.region
             by_region.setdefault(key, []).append({
                 "source_name": m.source_name,
                 "text": m.text,
