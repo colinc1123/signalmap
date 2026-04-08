@@ -4,6 +4,8 @@ import React, { useEffect, useMemo, useState, useCallback } from "react";
 
 const API_BASE = "https://signalmap-production-111b.up.railway.app";
 
+type SourcePlatform = "telegram" | "x" | "instagram";
+
 type MessageItem = {
   id: number;
   source_name: string;
@@ -42,16 +44,94 @@ type Narrative = {
   generated_at: string | null;
 };
 
+const MOCK_X_POSTS = [
+  {
+    id: 9001, source_name: "@UAWarMapper", handle: "@UAWarMapper",
+    text: "CONFIRMED: Russian Su-34 downed over Zaporizhzhia Oblast. Ukrainian air defense claims responsibility. Wreckage reported near Tokmak. #UkraineWar",
+    posted_at: new Date(Date.now() - 1000 * 60 * 8).toISOString(),
+    region: "Eastern Europe", country: "Ukraine", event_domain: "air_defense",
+    weapon_type: "airstrike", claim_status: "confirmed", confidence: "high",
+    likes: 4821, reposts: 1203, verified: true,
+  },
+  {
+    id: 9002, source_name: "@IntelCrab", handle: "@IntelCrab",
+    text: "Reports of ballistic missile launch from Yemen towards Red Sea shipping lane. CENTCOM tracking. Commercial vessels advised to divert.",
+    posted_at: new Date(Date.now() - 1000 * 60 * 23).toISOString(),
+    region: "Middle East", country: "Yemen", event_domain: "kinetic",
+    weapon_type: "ballistic_missile", claim_status: "unverified", confidence: "medium",
+    likes: 2390, reposts: 876, verified: true,
+  },
+  {
+    id: 9003, source_name: "@OSINTdefender", handle: "@OSINTdefender",
+    text: "Satellite imagery from Maxar shows significant damage to the Banias oil refinery in Syria. Attack occurred between 0200-0400 local. IDF has not commented.",
+    posted_at: new Date(Date.now() - 1000 * 60 * 47).toISOString(),
+    region: "Middle East", country: "Syria", event_domain: "kinetic",
+    weapon_type: "airstrike", claim_status: "claimed", confidence: "high",
+    likes: 6104, reposts: 2011, verified: false,
+  },
+  {
+    id: 9004, source_name: "@GeoConfirmed", handle: "@GeoConfirmed",
+    text: "GEOLOCATED: Footage from Kursk showing Russian TOS-1A thermobaric system active near Ukrainian cross-border positions. Grid ref approximate.",
+    posted_at: new Date(Date.now() - 1000 * 60 * 95).toISOString(),
+    region: "Eastern Europe", country: "Russia", event_domain: "kinetic",
+    weapon_type: "artillery", claim_status: "confirmed", confidence: "high",
+    likes: 3311, reposts: 998, verified: true,
+  },
+  {
+    id: 9005, source_name: "@sentdefender", handle: "@sentdefender",
+    text: "Breaking: Large explosion reported in the port city of Hodeidah, Yemen. Multiple sources. Likely coalition airstrike on Houthi weapons depot.",
+    posted_at: new Date(Date.now() - 1000 * 60 * 130).toISOString(),
+    region: "Middle East", country: "Yemen", event_domain: "kinetic",
+    weapon_type: "airstrike", claim_status: "unverified", confidence: "medium",
+    likes: 1879, reposts: 541, verified: false,
+  },
+];
+
+const MOCK_INSTAGRAM_POSTS = [
+  {
+    id: 8001, source_name: "warzoneintel", handle: "warzoneintel",
+    text: "🔴 Breaking: Drone footage shows aftermath of strike on armored column in Donetsk Oblast. Multiple vehicles destroyed. Full breakdown in our story highlights. [Video via regional source]",
+    posted_at: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
+    region: "Eastern Europe", country: "Ukraine", event_domain: "kinetic",
+    weapon_type: "uav", claim_status: "unverified", confidence: "medium",
+    likes: 18432, media_type: "video", verified: true,
+  },
+  {
+    id: 8002, source_name: "mideastconflict", handle: "mideastconflict",
+    text: "Exclusive: Photos from southern Lebanon show Hezbollah logistics convoy near Tyre. Timestamp verified by our team. Exercise caution — region remains volatile.",
+    posted_at: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
+    region: "Middle East", country: "Lebanon", event_domain: "kinetic",
+    weapon_type: null, claim_status: "claimed", confidence: "medium",
+    likes: 9204, media_type: "image", verified: false,
+  },
+  {
+    id: 8003, source_name: "conflictarchive", handle: "conflictarchive",
+    text: "Archive restoration: Side-by-side satellite comparison of Mariupol port district, March 2022 vs present. Infrastructure recovery is ongoing but significant damage remains visible.",
+    posted_at: new Date(Date.now() - 1000 * 60 * 200).toISOString(),
+    region: "Eastern Europe", country: "Ukraine", event_domain: "kinetic",
+    weapon_type: null, claim_status: "confirmed", confidence: "high",
+    likes: 24871, media_type: "image", verified: true,
+  },
+  {
+    id: 8004, source_name: "redseamonitor", handle: "redseamonitor",
+    text: "GRAB: Houthi-aligned channel releases footage claiming to show USV attack on commercial tanker. Authenticity unverified. Lloyd's List tracking vessel as 'dark'.",
+    posted_at: new Date(Date.now() - 1000 * 60 * 290).toISOString(),
+    region: "Middle East", country: "Yemen", event_domain: "kinetic",
+    weapon_type: "naval", claim_status: "disputed", confidence: "low",
+    likes: 7341, media_type: "video", verified: false,
+  },
+];
+
 function formatTime(value: string | null) {
   if (!value) return "—";
   const date = new Date(value);
   const diffMs = Date.now() - date.getTime();
   const diffMin = Math.floor(diffMs / 60000);
   if (diffMin < 1) return "just now";
-  if (diffMin < 60) return `${diffMin}m ago`;
+  if (diffMin < 60) return `${diffMin}m`;
   const diffHr = Math.floor(diffMin / 60);
-  if (diffHr < 24) return `${diffHr}h ago`;
-  return `${Math.floor(diffHr / 24)}d ago`;
+  if (diffHr < 24) return `${diffHr}h`;
+  return `${Math.floor(diffHr / 24)}d`;
 }
 
 function humanize(val: string | null): string {
@@ -60,27 +140,27 @@ function humanize(val: string | null): string {
 }
 
 const DOMAIN_META: Record<string, { color: string; bg: string; label: string }> = {
-  kinetic:             { color: "#f87171", bg: "rgba(248,113,113,0.08)", label: "Kinetic" },
-  air_defense:         { color: "#fb923c", bg: "rgba(251,146,60,0.08)",  label: "Air Defense" },
-  political_diplomatic:{ color: "#60a5fa", bg: "rgba(96,165,250,0.08)",  label: "Diplomatic" },
-  cyber:               { color: "#c084fc", bg: "rgba(192,132,252,0.08)", label: "Cyber" },
-  humanitarian:        { color: "#4ade80", bg: "rgba(74,222,128,0.08)",  label: "Humanitarian" },
-  intelligence:        { color: "#22d3ee", bg: "rgba(34,211,238,0.08)",  label: "Intelligence" },
+  kinetic:             { color: "#dc2626", bg: "rgba(220,38,38,0.1)",   label: "KINETIC" },
+  air_defense:         { color: "#ea580c", bg: "rgba(234,88,12,0.1)",   label: "AIR DEF" },
+  political_diplomatic:{ color: "#2563eb", bg: "rgba(37,99,235,0.1)",   label: "DIPLOM" },
+  cyber:               { color: "#7c3aed", bg: "rgba(124,58,237,0.1)",  label: "CYBER" },
+  humanitarian:        { color: "#16a34a", bg: "rgba(22,163,74,0.1)",   label: "HUMINT" },
+  intelligence:        { color: "#0891b2", bg: "rgba(8,145,178,0.1)",   label: "INTEL" },
 };
 
 const CLAIM_COLOR: Record<string, string> = {
-  confirmed: "#4ade80",
-  claimed:   "#60a5fa",
-  denied:    "#f87171",
-  disputed:  "#fb923c",
-  unverified:"#94a3b8",
+  confirmed: "#16a34a",
+  claimed:   "#2563eb",
+  denied:    "#dc2626",
+  disputed:  "#ea580c",
+  unverified:"#6b7280",
 };
 
 const ESCALATION_META: Record<string, { color: string; label: string }> = {
-  stable:   { color: "#4ade80", label: "Stable" },
-  elevated: { color: "#facc15", label: "Elevated" },
-  high:     { color: "#fb923c", label: "High" },
-  critical: { color: "#f87171", label: "Critical" },
+  stable:   { color: "#16a34a", label: "STABLE" },
+  elevated: { color: "#ca8a04", label: "ELEVATED" },
+  high:     { color: "#ea580c", label: "HIGH" },
+  critical: { color: "#dc2626", label: "CRITICAL" },
 };
 
 type FilterState = {
@@ -101,14 +181,13 @@ const INIT_FILTERS: FilterState = {
 function ConfidencePips({ level }: { level: string | null }) {
   const levels = ["low", "medium", "high"];
   const idx = levels.indexOf(level ?? "");
-  const colors = ["#f87171", "#facc15", "#4ade80"];
+  const colors = ["#dc2626", "#ca8a04", "#16a34a"];
   return (
     <span style={{ display: "inline-flex", gap: 3, alignItems: "center" }}>
       {levels.map((_, i) => (
         <span key={i} style={{
           width: 5, height: 5, borderRadius: "50%",
-          background: i <= idx ? colors[Math.min(i, idx)] : "rgba(255,255,255,0.12)",
-          transition: "background 0.2s",
+          background: i <= idx ? colors[Math.min(i, idx)] : "rgba(255,255,255,0.15)",
         }} />
       ))}
     </span>
@@ -126,19 +205,19 @@ function FilterDrawer({
     Array.from(new Set(arr.filter(Boolean))).sort() as string[];
 
   const selStyle: React.CSSProperties = {
-    width: "100%", padding: "9px 12px", borderRadius: 8,
-    background: "rgba(255,255,255,0.05)",
-    border: "1px solid rgba(255,255,255,0.1)",
-    color: "rgba(255,255,255,0.85)",
-    fontSize: 13, fontFamily: "'DM Mono', monospace",
+    width: "100%", padding: "8px 10px", borderRadius: 4,
+    background: "rgba(255,255,255,0.04)",
+    border: "1px solid rgba(255,255,255,0.12)",
+    color: "rgba(255,255,255,0.8)",
+    fontSize: 11, fontFamily: "'Share Tech Mono', 'Courier New', monospace",
     outline: "none", cursor: "pointer",
     appearance: "none", WebkitAppearance: "none",
   };
 
   const labelStyle: React.CSSProperties = {
-    fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase",
-    color: "rgba(255,255,255,0.35)", fontFamily: "'DM Mono', monospace",
-    marginBottom: 6, display: "block",
+    fontSize: 9, letterSpacing: "0.15em", textTransform: "uppercase",
+    color: "rgba(255,255,255,0.3)", fontFamily: "'Share Tech Mono', 'Courier New', monospace",
+    marginBottom: 5, display: "block",
   };
 
   const fields: { label: string; key: keyof FilterState; opts: string[] }[] = [
@@ -146,80 +225,70 @@ function FilterDrawer({
     { label: "Domain", key: "event_domain", opts: uniq(items.map(i => i.event_domain)) },
     { label: "Weapon", key: "weapon_type", opts: uniq(items.map(i => i.weapon_type)) },
     { label: "Actor", key: "actor_primary", opts: uniq(items.map(i => i.actor_primary)) },
-    { label: "Claim", key: "claim_status", opts: uniq(items.map(i => i.claim_status)) },
+    { label: "Claim Status", key: "claim_status", opts: uniq(items.map(i => i.claim_status)) },
     { label: "Confidence", key: "confidence", opts: ["high","medium","low"].filter(c => items.some(i => i.confidence === c)) },
   ];
 
   return (
     <>
-      {/* Backdrop */}
       <div onClick={onClose} style={{
         position: "fixed", inset: 0, zIndex: 90,
-        background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)",
+        background: "rgba(0,0,0,0.7)",
         opacity: open ? 1 : 0, pointerEvents: open ? "auto" : "none",
-        transition: "opacity 0.25s",
+        transition: "opacity 0.2s",
       }} />
-      {/* Drawer */}
       <div style={{
         position: "fixed", top: 0, right: 0, bottom: 0,
-        width: "min(340px, 92vw)", zIndex: 100,
-        background: "#0f1117",
-        borderLeft: "1px solid rgba(255,255,255,0.08)",
+        width: "min(320px, 88vw)", zIndex: 100,
+        background: "#0d1117",
+        borderLeft: "1px solid rgba(255,255,255,0.1)",
         transform: open ? "translateX(0)" : "translateX(100%)",
-        transition: "transform 0.3s cubic-bezier(0.4,0,0.2,1)",
+        transition: "transform 0.28s cubic-bezier(0.4,0,0.2,1)",
         overflowY: "auto", padding: "0 0 40px",
       }}>
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "20px 24px", borderBottom: "1px solid rgba(255,255,255,0.07)",
-          position: "sticky", top: 0, background: "#0f1117", zIndex: 1,
+          padding: "16px 20px", borderBottom: "1px solid rgba(255,255,255,0.08)",
+          position: "sticky", top: 0, background: "#0d1117", zIndex: 1,
         }}>
-          <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, letterSpacing: "0.14em", textTransform: "uppercase", color: "rgba(255,255,255,0.5)" }}>
-            Filters {activeCount > 0 && `(${activeCount})`}
+          <span style={{ fontFamily: "'Share Tech Mono', 'Courier New', monospace", fontSize: 10, letterSpacing: "0.2em", textTransform: "uppercase", color: "rgba(255,255,255,0.4)" }}>
+            FILTER OPS {activeCount > 0 && `[${activeCount}]`}
           </span>
-          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
             {activeCount > 0 && (
               <button onClick={clearFilters} style={{
-                fontFamily: "'DM Mono', monospace", fontSize: 11,
-                color: "#60a5fa", background: "none", border: "none",
-                cursor: "pointer", letterSpacing: "0.06em",
-              }}>Clear all</button>
+                fontFamily: "'Share Tech Mono', 'Courier New', monospace", fontSize: 10,
+                color: "#dc2626", background: "none", border: "none",
+                cursor: "pointer", letterSpacing: "0.08em",
+              }}>CLR ALL</button>
             )}
             <button onClick={onClose} style={{
-              width: 32, height: 32, borderRadius: 8,
-              background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)",
-              color: "rgba(255,255,255,0.7)", cursor: "pointer",
+              width: 28, height: 28, borderRadius: 2,
+              background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)",
+              color: "rgba(255,255,255,0.6)", cursor: "pointer",
               display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 16,
+              fontSize: 14,
             }}>✕</button>
           </div>
         </div>
-
-        <div style={{ padding: "24px 24px 0" }}>
-          <div style={{ marginBottom: 20 }}>
-            <label style={labelStyle}>Search</label>
-            <input
-              type="text" value={filters.search}
+        <div style={{ padding: "20px 20px 0" }}>
+          <div style={{ marginBottom: 16 }}>
+            <label style={labelStyle}>Search / Keyword</label>
+            <input type="text" value={filters.search}
               onChange={e => setFilter("search", e.target.value)}
-              placeholder="Keyword, source, country…"
-              style={{
-                ...selStyle, background: "rgba(255,255,255,0.05)",
-                fontFamily: "'DM Mono', monospace",
-              }}
+              placeholder="Source, country, term..."
+              style={{ ...selStyle, fontFamily: "'Share Tech Mono', 'Courier New', monospace" }}
             />
           </div>
           {fields.map(({ label, key, opts }) => (
-            <div key={key} style={{ marginBottom: 16 }}>
+            <div key={key} style={{ marginBottom: 12 }}>
               <label style={labelStyle}>{label}</label>
               <div style={{ position: "relative" }}>
                 <select value={filters[key]} onChange={e => setFilter(key, e.target.value)} style={selStyle}>
-                  <option value="">All</option>
-                  {opts.map(o => <option key={o} value={o}>{humanize(o)}</option>)}
+                  <option value="">ALL</option>
+                  {opts.map(o => <option key={o} value={o}>{o.toUpperCase().replace(/_/g, " ")}</option>)}
                 </select>
-                <span style={{
-                  position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)",
-                  color: "rgba(255,255,255,0.3)", pointerEvents: "none", fontSize: 10,
-                }}>▼</span>
+                <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: "rgba(255,255,255,0.25)", pointerEvents: "none", fontSize: 9 }}>▼</span>
               </div>
             </div>
           ))}
@@ -231,149 +300,118 @@ function FilterDrawer({
 
 function VideoPlayer({ url }: { url: string }) {
   const [active, setActive] = useState(false);
-
   if (!active) {
     return (
-      <button
-        onClick={() => setActive(true)}
-        style={{
-          display: "flex", alignItems: "center", justifyContent: "center",
-          width: "100%", aspectRatio: "16/9", maxHeight: 260,
-          borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)",
-          background: "rgba(0,0,0,0.4)", cursor: "pointer",
-          marginBottom: 12, gap: 10, color: "rgba(255,255,255,0.6)",
-          fontFamily: "'DM Mono', monospace", fontSize: 11,
-          letterSpacing: "0.08em",
-          transition: "background 0.15s, border-color 0.15s",
-        }}
-        onMouseEnter={e => {
-          (e.currentTarget as HTMLButtonElement).style.background = "rgba(59,130,246,0.12)";
-          (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(96,165,250,0.3)";
-        }}
-        onMouseLeave={e => {
-          (e.currentTarget as HTMLButtonElement).style.background = "rgba(0,0,0,0.4)";
-          (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(255,255,255,0.1)";
-        }}
-      >
-        <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
-          <circle cx="18" cy="18" r="17" stroke="rgba(255,255,255,0.15)" strokeWidth="1.5"/>
-          <polygon points="14,11 27,18 14,25" fill="rgba(255,255,255,0.7)"/>
+      <button onClick={() => setActive(true)} style={{
+        display: "flex", alignItems: "center", justifyContent: "center",
+        width: "100%", aspectRatio: "16/9", maxHeight: 220,
+        borderRadius: 2, border: "1px solid rgba(255,255,255,0.12)",
+        background: "rgba(0,0,0,0.5)", cursor: "pointer",
+        marginBottom: 10, gap: 8, color: "rgba(255,255,255,0.5)",
+        fontFamily: "'Share Tech Mono', 'Courier New', monospace", fontSize: 10,
+        letterSpacing: "0.12em",
+      }}>
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+          <circle cx="16" cy="16" r="15" stroke="rgba(255,255,255,0.2)" strokeWidth="1"/>
+          <polygon points="12,10 24,16 12,22" fill="rgba(255,255,255,0.6)"/>
         </svg>
-        <span>Tap to play video</span>
+        <span>PLAY FOOTAGE</span>
       </button>
     );
   }
-
   return (
-    <video
-      src={url}
-      controls
-      autoPlay
-      preload="metadata"
-      style={{
-        maxWidth: "100%", borderRadius: 8,
-        border: "1px solid rgba(255,255,255,0.07)",
-        marginBottom: 12, display: "block",
-      }}
-    />
+    <video src={url} controls autoPlay preload="metadata" style={{
+      maxWidth: "100%", borderRadius: 2,
+      border: "1px solid rgba(255,255,255,0.08)",
+      marginBottom: 10, display: "block",
+    }} />
   );
 }
 
 function SignalCard({ item }: { item: MessageItem }) {
-  const domain = DOMAIN_META[item.event_domain ?? ""] ?? { color: "#64748b", bg: "rgba(100,116,139,0.08)", label: "" };
-  const claimColor = CLAIM_COLOR[item.claim_status ?? ""] ?? "#64748b";
+  const domain = DOMAIN_META[item.event_domain ?? ""] ?? { color: "#6b7280", bg: "rgba(107,114,128,0.08)", label: "UNK" };
+  const claimColor = CLAIM_COLOR[item.claim_status ?? ""] ?? "#6b7280";
 
   return (
     <article style={{
-      background: "#13161e",
-      border: "1px solid rgba(255,255,255,0.06)",
-      borderLeft: `3px solid ${domain.color}`,
-      borderRadius: 12,
-      padding: "16px 18px",
-      transition: "border-color 0.15s, background 0.15s",
+      background: "#0d1117",
+      border: "1px solid rgba(255,255,255,0.07)",
+      borderLeft: `2px solid ${domain.color}`,
+      borderRadius: 0,
+      padding: "14px 16px",
     }}>
-      {/* Header row */}
-      <div style={{
-        display: "flex", alignItems: "flex-start", justifyContent: "space-between",
-        gap: 10, marginBottom: 10,
-      }}>
-        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "4px 10px", flex: 1, minWidth: 0 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "3px 8px", flex: 1, minWidth: 0 }}>
           {item.event_domain && (
             <span style={{
-              fontSize: 10, fontFamily: "'DM Mono', monospace", fontWeight: 500,
-              letterSpacing: "0.08em", padding: "2px 8px", borderRadius: 4,
+              fontSize: 9, fontFamily: "'Share Tech Mono', 'Courier New', monospace", fontWeight: 600,
+              letterSpacing: "0.12em", padding: "2px 6px", borderRadius: 0,
               background: domain.bg, color: domain.color,
-              border: `1px solid ${domain.color}30`,
-              whiteSpace: "nowrap",
-            }}>{domain.label || humanize(item.event_domain)}</span>
+              border: `1px solid ${domain.color}40`,
+            }}>{domain.label}</span>
           )}
           <span style={{
-            fontSize: 12, fontFamily: "'DM Mono', monospace", fontWeight: 600,
-            color: "#93c5fd", whiteSpace: "nowrap", overflow: "hidden",
+            fontSize: 11, fontFamily: "'Share Tech Mono', 'Courier New', monospace",
+            color: "#60a5fa", whiteSpace: "nowrap", overflow: "hidden",
             textOverflow: "ellipsis", maxWidth: "160px",
           }}>{item.source_name}</span>
           {item.country && (
-            <span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", fontFamily: "'DM Mono', monospace" }}>
-              {item.country}{item.region ? ` · ${item.region}` : ""}
+            <span style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", fontFamily: "'Share Tech Mono', 'Courier New', monospace" }}>
+              {item.country.toUpperCase()}{item.region ? ` / ${item.region.toUpperCase()}` : ""}
             </span>
           )}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
           <ConfidencePips level={item.confidence} />
-          <span style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", fontFamily: "'DM Mono', monospace", whiteSpace: "nowrap" }}>
-            {formatTime(item.posted_at ?? item.collected_at)}
+          <span style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", fontFamily: "'Share Tech Mono', 'Courier New', monospace", whiteSpace: "nowrap" }}>
+            {formatTime(item.posted_at ?? item.collected_at)}Z
           </span>
         </div>
       </div>
 
-      {/* Text */}
       {item.text && (
         <p style={{
-          fontSize: 13.5, lineHeight: 1.7, color: "rgba(255,255,255,0.78)",
-          margin: "0 0 12px", fontFamily: "'DM Sans', sans-serif", fontWeight: 400,
+          fontSize: 13, lineHeight: 1.65, color: "rgba(255,255,255,0.72)",
+          margin: "0 0 10px", fontFamily: "Georgia, serif", fontWeight: 400,
         }}>{item.text}</p>
       )}
       {!item.text && !item.media_url && (
-        <p style={{ fontSize: 12, color: "rgba(255,255,255,0.2)", fontFamily: "'DM Mono', monospace", marginBottom: 12, fontStyle: "italic" }}>[media-only signal]</p>
+        <p style={{ fontSize: 11, color: "rgba(255,255,255,0.2)", fontFamily: "'Share Tech Mono', 'Courier New', monospace", marginBottom: 10, fontStyle: "italic" }}>[MEDIA ONLY — NO TEXT]</p>
       )}
 
-      {/* Media */}
       {item.media_url && item.media_type === "image" && (
         <img src={item.media_url} alt="signal media" loading="lazy" style={{
-          maxWidth: "100%", maxHeight: 260, objectFit: "cover",
-          borderRadius: 8, border: "1px solid rgba(255,255,255,0.07)",
-          marginBottom: 12, display: "block",
+          maxWidth: "100%", maxHeight: 220, objectFit: "cover",
+          borderRadius: 0, border: "1px solid rgba(255,255,255,0.08)",
+          marginBottom: 10, display: "block",
         }} />
       )}
-      {item.media_url && item.media_type === "video" && (
-        <VideoPlayer url={item.media_url} />
-      )}
+      {item.media_url && item.media_type === "video" && <VideoPlayer url={item.media_url} />}
       {item.media_url && item.media_type === "document" && (
         <a href={item.media_url} target="_blank" rel="noreferrer" style={{
-          fontFamily: "'DM Mono', monospace", fontSize: 11, color: "#60a5fa",
-          textDecoration: "none", display: "inline-block", marginBottom: 12,
-        }}>↗ View document</a>
+          fontFamily: "'Share Tech Mono', 'Courier New', monospace", fontSize: 10, color: "#60a5fa",
+          textDecoration: "none", display: "inline-block", marginBottom: 10, letterSpacing: "0.08em",
+        }}>↗ DOCUMENT</a>
       )}
 
-      {/* Tags */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
         {[
-          item.event_type && { label: "type", value: humanize(item.event_type), c: "rgba(255,255,255,0.4)" },
-          item.weapon_type && { label: "weapon", value: humanize(item.weapon_type), c: "#fb923c" },
-          item.target_type && { label: "target", value: humanize(item.target_type), c: "#c084fc" },
-          item.actor_primary && { label: "actor", value: item.actor_primary, c: "#22d3ee" },
-          item.claim_status && { label: "claim", value: humanize(item.claim_status), c: claimColor },
-          item.has_media && item.media_type && { label: "media", value: item.media_type, c: "#818cf8" },
+          item.event_type && { label: "TYPE", value: item.event_type.toUpperCase().replace(/_/g," "), c: "rgba(255,255,255,0.35)" },
+          item.weapon_type && { label: "WPN", value: item.weapon_type.toUpperCase().replace(/_/g," "), c: "#ea580c" },
+          item.target_type && { label: "TGT", value: item.target_type.toUpperCase().replace(/_/g," "), c: "#7c3aed" },
+          item.actor_primary && { label: "ACT", value: item.actor_primary.toUpperCase(), c: "#0891b2" },
+          item.claim_status && { label: "CLAIM", value: item.claim_status.toUpperCase(), c: claimColor },
+          item.has_media && item.media_type && { label: "MEDIA", value: item.media_type.toUpperCase(), c: "#6b7280" },
         ].filter(Boolean).map((tag: any) => (
           <span key={tag.label} style={{
-            fontSize: 10.5, fontFamily: "'DM Mono', monospace",
-            padding: "2px 7px", borderRadius: 5,
-            background: `${tag.c}10`,
-            border: `1px solid ${tag.c}30`,
+            fontSize: 9, fontFamily: "'Share Tech Mono', 'Courier New', monospace",
+            padding: "2px 6px", borderRadius: 0,
+            background: `${tag.c}12`,
+            border: `1px solid ${tag.c}35`,
             color: tag.c,
-            whiteSpace: "nowrap",
+            letterSpacing: "0.08em",
           }}>
-            <span style={{ opacity: 0.5, marginRight: 4 }}>{tag.label}</span>{tag.value}
+            <span style={{ opacity: 0.45, marginRight: 3 }}>{tag.label}:</span>{tag.value}
           </span>
         ))}
       </div>
@@ -381,42 +419,216 @@ function SignalCard({ item }: { item: MessageItem }) {
   );
 }
 
-function NarrativeCard({ n }: { n: Narrative }) {
-  const [expanded, setExpanded] = useState(false);
-  const meta = ESCALATION_META[n.escalation_level] ?? { color: "#64748b", label: n.escalation_level };
+function XPostCard({ post }: { post: typeof MOCK_X_POSTS[0] }) {
+  const domain = DOMAIN_META[post.event_domain ?? ""] ?? { color: "#6b7280", bg: "rgba(107,114,128,0.08)", label: "UNK" };
+  const claimColor = CLAIM_COLOR[post.claim_status ?? ""] ?? "#6b7280";
 
   return (
     <article style={{
-      background: "#13161e",
-      border: "1px solid rgba(255,255,255,0.06)",
-      borderLeft: `3px solid ${meta.color}`,
-      borderRadius: 12,
-      padding: "18px 20px",
+      background: "#0d1117",
+      border: "1px solid rgba(255,255,255,0.07)",
+      borderLeft: `2px solid ${domain.color}`,
+      borderRadius: 0,
+      padding: "14px 16px",
     }}>
-      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "6px 12px", marginBottom: 10 }}>
-        <span style={{
-          fontSize: 10, fontFamily: "'DM Mono', monospace", letterSpacing: "0.1em",
-          textTransform: "uppercase", padding: "3px 9px", borderRadius: 5,
-          background: `${meta.color}15`, color: meta.color,
-          border: `1px solid ${meta.color}35`,
-        }}>{meta.label}</span>
-        <span style={{ fontSize: 12, fontFamily: "'DM Mono', monospace", color: "rgba(255,255,255,0.45)" }}>
-          {n.region}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "3px 8px", flex: 1, minWidth: 0 }}>
+          {post.event_domain && (
+            <span style={{
+              fontSize: 9, fontFamily: "'Share Tech Mono', 'Courier New', monospace",
+              letterSpacing: "0.12em", padding: "2px 6px", borderRadius: 0,
+              background: domain.bg, color: domain.color,
+              border: `1px solid ${domain.color}40`,
+            }}>{domain.label}</span>
+          )}
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="rgba(255,255,255,0.5)">
+              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.748l7.73-8.835L1.254 2.25H8.08l4.259 5.63zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+            </svg>
+            <span style={{ fontSize: 11, fontFamily: "'Share Tech Mono', 'Courier New', monospace", color: "#60a5fa" }}>
+              {post.handle}
+            </span>
+            {post.verified && (
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="#60a5fa">
+                <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
+              </svg>
+            )}
+          </span>
+          <span style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", fontFamily: "'Share Tech Mono', 'Courier New', monospace" }}>
+            {post.country?.toUpperCase()}
+          </span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          <ConfidencePips level={post.confidence} />
+          <span style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", fontFamily: "'Share Tech Mono', 'Courier New', monospace", whiteSpace: "nowrap" }}>
+            {formatTime(post.posted_at)}Z
+          </span>
+        </div>
+      </div>
+
+      <p style={{
+        fontSize: 13, lineHeight: 1.65, color: "rgba(255,255,255,0.75)",
+        margin: "0 0 10px", fontFamily: "Georgia, serif",
+      }}>{post.text}</p>
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 5, alignItems: "center" }}>
+        <span style={{ fontSize: 9, fontFamily: "'Share Tech Mono', 'Courier New', monospace", color: "rgba(255,255,255,0.2)", marginRight: 4 }}>
+          ↑{post.reposts.toLocaleString()} RT  ♡{post.likes.toLocaleString()}
         </span>
-        <span style={{ fontSize: 11, fontFamily: "'DM Mono', monospace", color: "rgba(255,255,255,0.22)" }}>
-          {n.signal_count} signals · {formatTime(n.generated_at)}
+        {post.weapon_type && (
+          <span style={{ fontSize: 9, fontFamily: "'Share Tech Mono', 'Courier New', monospace", padding: "2px 6px", borderRadius: 0, background: "rgba(234,88,12,0.1)", border: "1px solid rgba(234,88,12,0.3)", color: "#ea580c", letterSpacing: "0.08em" }}>
+            <span style={{ opacity: 0.45, marginRight: 3 }}>WPN:</span>{post.weapon_type.toUpperCase().replace(/_/g," ")}
+          </span>
+        )}
+        <span style={{ fontSize: 9, fontFamily: "'Share Tech Mono', 'Courier New', monospace", padding: "2px 6px", borderRadius: 0, background: `${claimColor}12`, border: `1px solid ${claimColor}35`, color: claimColor, letterSpacing: "0.08em" }}>
+          <span style={{ opacity: 0.45, marginRight: 3 }}>CLAIM:</span>{post.claim_status?.toUpperCase()}
+        </span>
+      </div>
+
+      <div style={{ marginTop: 8, padding: "6px 8px", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 0 }}>
+        <span style={{ fontSize: 9, fontFamily: "'Share Tech Mono', 'Courier New', monospace", color: "rgba(255,255,255,0.2)", letterSpacing: "0.1em" }}>
+          ⚠ PLATFORM INTEGRATION PENDING — DISPLAY MODE ONLY
+        </span>
+      </div>
+    </article>
+  );
+}
+
+function InstaPostCard({ post }: { post: typeof MOCK_INSTAGRAM_POSTS[0] }) {
+  const domain = DOMAIN_META[post.event_domain ?? ""] ?? { color: "#6b7280", bg: "rgba(107,114,128,0.08)", label: "UNK" };
+  const claimColor = CLAIM_COLOR[post.claim_status ?? ""] ?? "#6b7280";
+
+  return (
+    <article style={{
+      background: "#0d1117",
+      border: "1px solid rgba(255,255,255,0.07)",
+      borderLeft: `2px solid ${domain.color}`,
+      borderRadius: 0,
+      padding: "14px 16px",
+    }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "3px 8px", flex: 1, minWidth: 0 }}>
+          {post.event_domain && (
+            <span style={{
+              fontSize: 9, fontFamily: "'Share Tech Mono', 'Courier New', monospace",
+              letterSpacing: "0.12em", padding: "2px 6px", borderRadius: 0,
+              background: domain.bg, color: domain.color,
+              border: `1px solid ${domain.color}40`,
+            }}>{domain.label}</span>
+          )}
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2">
+              <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
+              <circle cx="12" cy="12" r="4"/>
+              <circle cx="17.5" cy="6.5" r="1" fill="rgba(255,255,255,0.5)" stroke="none"/>
+            </svg>
+            <span style={{ fontSize: 11, fontFamily: "'Share Tech Mono', 'Courier New', monospace", color: "#e879f9" }}>
+              @{post.handle}
+            </span>
+            {post.verified && (
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="#e879f9">
+                <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
+              </svg>
+            )}
+          </span>
+          <span style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", fontFamily: "'Share Tech Mono', 'Courier New', monospace" }}>
+            {post.country?.toUpperCase()}
+          </span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          <ConfidencePips level={post.confidence} />
+          <span style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", fontFamily: "'Share Tech Mono', 'Courier New', monospace", whiteSpace: "nowrap" }}>
+            {formatTime(post.posted_at)}Z
+          </span>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
+        <div style={{
+          width: 72, height: 72, flexShrink: 0,
+          background: "rgba(255,255,255,0.04)",
+          border: "1px solid rgba(255,255,255,0.1)",
+          borderRadius: 0,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          position: "relative",
+        }}>
+          {post.media_type === "video" ? (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="11" stroke="rgba(255,255,255,0.2)" strokeWidth="1"/>
+              <polygon points="10,8 18,12 10,16" fill="rgba(255,255,255,0.5)"/>
+            </svg>
+          ) : (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5">
+              <rect x="3" y="3" width="18" height="18"/>
+              <circle cx="8.5" cy="8.5" r="1.5"/>
+              <path d="M21 15l-5-5L5 21"/>
+            </svg>
+          )}
+          <span style={{ position: "absolute", bottom: 2, right: 3, fontSize: 8, color: "rgba(255,255,255,0.3)", fontFamily: "'Share Tech Mono', monospace" }}>
+            {post.media_type?.toUpperCase()}
+          </span>
+        </div>
+        <p style={{
+          fontSize: 13, lineHeight: 1.65, color: "rgba(255,255,255,0.72)",
+          margin: 0, fontFamily: "Georgia, serif", flex: 1,
+        }}>{post.text}</p>
+      </div>
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 5, alignItems: "center" }}>
+        <span style={{ fontSize: 9, fontFamily: "'Share Tech Mono', 'Courier New', monospace", color: "rgba(255,255,255,0.2)", marginRight: 4 }}>
+          ♡{post.likes.toLocaleString()}
+        </span>
+        <span style={{ fontSize: 9, fontFamily: "'Share Tech Mono', 'Courier New', monospace", padding: "2px 6px", borderRadius: 0, background: `${claimColor}12`, border: `1px solid ${claimColor}35`, color: claimColor, letterSpacing: "0.08em" }}>
+          <span style={{ opacity: 0.45, marginRight: 3 }}>CLAIM:</span>{post.claim_status?.toUpperCase()}
+        </span>
+      </div>
+
+      <div style={{ marginTop: 8, padding: "6px 8px", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 0 }}>
+        <span style={{ fontSize: 9, fontFamily: "'Share Tech Mono', 'Courier New', monospace", color: "rgba(255,255,255,0.2)", letterSpacing: "0.1em" }}>
+          ⚠ PLATFORM INTEGRATION PENDING — DISPLAY MODE ONLY
+        </span>
+      </div>
+    </article>
+  );
+}
+
+function NarrativeCard({ n }: { n: Narrative }) {
+  const [expanded, setExpanded] = useState(false);
+  const meta = ESCALATION_META[n.escalation_level] ?? { color: "#6b7280", label: n.escalation_level.toUpperCase() };
+
+  return (
+    <article style={{
+      background: "#0d1117",
+      border: "1px solid rgba(255,255,255,0.07)",
+      borderLeft: `2px solid ${meta.color}`,
+      borderRadius: 0,
+      padding: "16px 18px",
+    }}>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "5px 10px", marginBottom: 8 }}>
+        <span style={{
+          fontSize: 9, fontFamily: "'Share Tech Mono', 'Courier New', monospace", letterSpacing: "0.15em",
+          padding: "2px 8px", borderRadius: 0,
+          background: `${meta.color}15`, color: meta.color,
+          border: `1px solid ${meta.color}40`,
+        }}>{meta.label}</span>
+        <span style={{ fontSize: 10, fontFamily: "'Share Tech Mono', 'Courier New', monospace", color: "rgba(255,255,255,0.4)" }}>
+          {n.region.toUpperCase()}
+        </span>
+        <span style={{ fontSize: 10, fontFamily: "'Share Tech Mono', 'Courier New', monospace", color: "rgba(255,255,255,0.2)" }}>
+          {n.signal_count} SIG · {formatTime(n.generated_at)}Z
         </span>
       </div>
 
       <h3 style={{
-        fontSize: 15, fontWeight: 600, color: "#f1f5f9",
-        lineHeight: 1.4, margin: "0 0 10px",
-        fontFamily: "'DM Sans', sans-serif",
+        fontSize: 14, fontWeight: 600, color: "#e2e8f0",
+        lineHeight: 1.4, margin: "0 0 8px",
+        fontFamily: "Georgia, serif",
+        textTransform: "uppercase", letterSpacing: "0.04em",
       }}>{n.title}</h3>
 
       <p style={{
-        fontSize: 13, lineHeight: 1.75, color: "rgba(255,255,255,0.6)",
-        fontFamily: "'DM Sans', sans-serif", margin: 0,
+        fontSize: 13, lineHeight: 1.75, color: "rgba(255,255,255,0.55)",
+        fontFamily: "Georgia, serif", margin: 0,
         display: expanded ? "block" : "-webkit-box",
         WebkitLineClamp: expanded ? undefined : 3,
         WebkitBoxOrient: "vertical" as const,
@@ -425,31 +637,31 @@ function NarrativeCard({ n }: { n: Narrative }) {
 
       {n.summary.length > 180 && (
         <button onClick={() => setExpanded(!expanded)} style={{
-          fontFamily: "'DM Mono', monospace", fontSize: 11,
+          fontFamily: "'Share Tech Mono', 'Courier New', monospace", fontSize: 9,
           color: "#60a5fa", background: "none", border: "none",
-          cursor: "pointer", marginTop: 8, padding: 0,
-          letterSpacing: "0.04em",
-        }}>{expanded ? "Show less ↑" : "Read more ↓"}</button>
+          cursor: "pointer", marginTop: 6, padding: 0,
+          letterSpacing: "0.1em",
+        }}>{expanded ? "▲ COLLAPSE" : "▼ EXPAND"}</button>
       )}
 
       {expanded && (n.key_actors.length > 0 || n.key_locations.length > 0) && (
-        <div style={{ marginTop: 16, display: "flex", flexWrap: "wrap", gap: 16 }}>
+        <div style={{ marginTop: 14, display: "flex", flexWrap: "wrap", gap: 14 }}>
           {n.key_actors.length > 0 && (
             <div>
-              <div style={{ fontSize: 9, fontFamily: "'DM Mono', monospace", letterSpacing: "0.14em", color: "rgba(255,255,255,0.25)", textTransform: "uppercase", marginBottom: 6 }}>Actors</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+              <div style={{ fontSize: 9, fontFamily: "'Share Tech Mono', 'Courier New', monospace", letterSpacing: "0.15em", color: "rgba(255,255,255,0.2)", textTransform: "uppercase", marginBottom: 5 }}>ACTORS</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                 {n.key_actors.map(a => (
-                  <span key={a} style={{ fontSize: 11, fontFamily: "'DM Mono', monospace", color: "#22d3ee", background: "rgba(34,211,238,0.08)", border: "1px solid rgba(34,211,238,0.2)", padding: "2px 8px", borderRadius: 5 }}>{a}</span>
+                  <span key={a} style={{ fontSize: 10, fontFamily: "'Share Tech Mono', 'Courier New', monospace", color: "#0891b2", background: "rgba(8,145,178,0.08)", border: "1px solid rgba(8,145,178,0.2)", padding: "2px 6px", borderRadius: 0 }}>{a}</span>
                 ))}
               </div>
             </div>
           )}
           {n.key_locations.length > 0 && (
             <div>
-              <div style={{ fontSize: 9, fontFamily: "'DM Mono', monospace", letterSpacing: "0.14em", color: "rgba(255,255,255,0.25)", textTransform: "uppercase", marginBottom: 6 }}>Locations</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+              <div style={{ fontSize: 9, fontFamily: "'Share Tech Mono', 'Courier New', monospace", letterSpacing: "0.15em", color: "rgba(255,255,255,0.2)", textTransform: "uppercase", marginBottom: 5 }}>LOCATIONS</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                 {n.key_locations.map(l => (
-                  <span key={l} style={{ fontSize: 11, fontFamily: "'DM Mono', monospace", color: "rgba(255,255,255,0.55)", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", padding: "2px 8px", borderRadius: 5 }}>{l}</span>
+                  <span key={l} style={{ fontSize: 10, fontFamily: "'Share Tech Mono', 'Courier New', monospace", color: "rgba(255,255,255,0.45)", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", padding: "2px 6px", borderRadius: 0 }}>{l}</span>
                 ))}
               </div>
             </div>
@@ -472,7 +684,18 @@ export default function SignalMap() {
   const [narrativesError, setNarrativesError] = useState("");
   const [narrativeWindow, setNarrativeWindow] = useState(24);
   const [filterOpen, setFilterOpen] = useState(false);
-  const [sidebarVisible, setSidebarVisible] = useState(false);
+  const [sourcePlatform, setSourcePlatform] = useState<SourcePlatform>("telegram");
+  const [utcTime, setUtcTime] = useState("");
+
+  useEffect(() => {
+    const tick = () => {
+      const now = new Date();
+      setUtcTime(now.toUTCString().slice(17, 25) + "Z");
+    };
+    tick();
+    const iv = setInterval(tick, 1000);
+    return () => clearInterval(iv);
+  }, []);
 
   const fetchFeed = useCallback(async () => {
     try {
@@ -544,31 +767,47 @@ export default function SignalMap() {
     Array.from(new Set(arr.filter(Boolean))).sort() as string[];
 
   const selStyle: React.CSSProperties = {
-    width: "100%", padding: "8px 10px", borderRadius: 7,
-    background: "rgba(255,255,255,0.04)",
-    border: "1px solid rgba(255,255,255,0.09)",
-    color: "rgba(255,255,255,0.75)",
-    fontSize: 12, fontFamily: "'DM Mono', monospace",
+    width: "100%", padding: "7px 8px", borderRadius: 0,
+    background: "rgba(255,255,255,0.03)",
+    border: "1px solid rgba(255,255,255,0.1)",
+    color: "rgba(255,255,255,0.7)",
+    fontSize: 10, fontFamily: "'Share Tech Mono', 'Courier New', monospace",
     outline: "none", cursor: "pointer",
     appearance: "none", WebkitAppearance: "none",
   };
 
+  const PLATFORM_OPTIONS: { value: SourcePlatform; label: string; color: string }[] = [
+    { value: "telegram", label: "TELEGRAM", color: "#60a5fa" },
+    { value: "x", label: "X / TWITTER", color: "rgba(255,255,255,0.7)" },
+    { value: "instagram", label: "INSTAGRAM", color: "#e879f9" },
+  ];
+
+  const currentPlatform = PLATFORM_OPTIONS.find(p => p.value === sourcePlatform)!;
+
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         html { -webkit-font-smoothing: antialiased; }
-        body { background: #0a0d14; color: #e2e8f0; font-family: 'DM Sans', sans-serif; min-height: 100vh; }
-        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        body {
+          background: #080b10;
+          color: #e2e8f0;
+          font-family: Georgia, serif;
+          min-height: 100vh;
+          background-image:
+            linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+          background-size: 40px 40px;
+        }
+        ::-webkit-scrollbar { width: 3px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); }
         input, select, button { font-family: inherit; }
-        @keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
-        .signal-card { animation: fadeIn 0.2s ease both; }
-        @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
-        .live-dot { animation: pulse 2s infinite; }
-        /* Desktop sidebar visible */
+        @keyframes fadeIn { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
+        .signal-card { animation: fadeIn 0.18s ease both; }
+        @keyframes blink { 0%,49% { opacity:1; } 50%,100% { opacity:0; } }
+        .blink { animation: blink 1s step-end infinite; }
         @media (min-width: 900px) {
           .desktop-sidebar { display: flex !important; }
           .filter-fab { display: none !important; }
@@ -578,7 +817,6 @@ export default function SignalMap() {
         }
       `}</style>
 
-      {/* Filter drawer (mobile) */}
       <FilterDrawer
         open={filterOpen} onClose={() => setFilterOpen(false)}
         filters={filters} setFilter={setFilter}
@@ -586,290 +824,351 @@ export default function SignalMap() {
         activeCount={activeFilterCount} items={items}
       />
 
-      {/* ── Header ── */}
+      {/* Header */}
       <header style={{
         position: "sticky", top: 0, zIndex: 50,
-        background: "rgba(10,13,20,0.9)", backdropFilter: "blur(16px)",
-        borderBottom: "1px solid rgba(255,255,255,0.06)",
+        background: "rgba(8,11,16,0.95)", backdropFilter: "blur(12px)",
+        borderBottom: "1px solid rgba(255,255,255,0.08)",
       }}>
+        {/* Top status bar */}
+        <div style={{
+          background: "rgba(220,38,38,0.08)",
+          borderBottom: "1px solid rgba(220,38,38,0.15)",
+          padding: "3px 16px",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+        }}>
+          <span style={{ fontFamily: "'Share Tech Mono', 'Courier New', monospace", fontSize: 9, letterSpacing: "0.2em", color: "rgba(220,38,38,0.7)" }}>
+            CLASSIFIED // OSINT // OPEN SOURCE ONLY // NOT FOR DISTRIBUTION
+          </span>
+          <span style={{ fontFamily: "'Share Tech Mono', 'Courier New', monospace", fontSize: 9, letterSpacing: "0.12em", color: "rgba(255,255,255,0.25)" }}>
+            {utcTime} UTC
+          </span>
+        </div>
+
         <div style={{
           maxWidth: 1280, margin: "0 auto",
           padding: "0 16px",
-          height: 58,
+          height: 52,
           display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
         }}>
           {/* Logo */}
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-            <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
-              <circle cx="13" cy="13" r="12" stroke="rgba(96,165,250,0.5)" strokeWidth="1.5"/>
-              <circle cx="13" cy="13" r="6.5" stroke="rgba(248,113,113,0.4)" strokeWidth="1.2"/>
-              <circle cx="13" cy="13" r="2.5" fill="#f87171"/>
-            </svg>
+            <div style={{
+              width: 32, height: 32, border: "1px solid rgba(220,38,38,0.5)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              position: "relative",
+            }}>
+              <div style={{ width: 8, height: 8, background: "#dc2626", position: "absolute" }} />
+              <div style={{ width: 20, height: 20, border: "1px solid rgba(220,38,38,0.3)", borderRadius: "50%", position: "absolute" }} />
+            </div>
             <div>
               <div style={{
-                fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 16,
-                letterSpacing: "-0.02em", lineHeight: 1, color: "#f8fafc",
+                fontFamily: "'Share Tech Mono', 'Courier New', monospace", fontWeight: 400, fontSize: 15,
+                letterSpacing: "0.2em", lineHeight: 1, color: "#f8fafc",
               }}>
-                Signal<span style={{ color: "#60a5fa" }}>Map</span>
+                SIGNAL<span style={{ color: "#dc2626" }}>MAP</span>
+                <span className="blink" style={{ color: "#dc2626", marginLeft: 2 }}>_</span>
               </div>
               <div style={{
-                fontFamily: "'DM Mono', monospace", fontSize: 8, letterSpacing: "0.2em",
-                color: "rgba(255,255,255,0.22)", marginTop: 1,
-              }}>OSINT MONITORING</div>
+                fontFamily: "'Share Tech Mono', 'Courier New', monospace", fontSize: 8, letterSpacing: "0.25em",
+                color: "rgba(255,255,255,0.2)", marginTop: 2,
+              }}>OSINT · CONFLICT MONITORING</div>
             </div>
           </div>
 
           {/* Tabs */}
-          <div style={{
-            display: "flex", gap: 2,
-            background: "rgba(255,255,255,0.04)", padding: 3, borderRadius: 10,
-            border: "1px solid rgba(255,255,255,0.07)",
-          }}>
+          <div style={{ display: "flex", gap: 1 }}>
             {(["feed", "narratives"] as const).map(tab => (
               <button key={tab} onClick={() => setActiveTab(tab)} style={{
-                fontFamily: "'DM Mono', monospace", fontSize: 11,
-                letterSpacing: "0.08em", textTransform: "uppercase",
-                padding: "6px 14px", borderRadius: 8, cursor: "pointer",
-                color: activeTab === tab ? "#f8fafc" : "rgba(255,255,255,0.35)",
-                background: activeTab === tab ? "rgba(96,165,250,0.18)" : "transparent",
-                border: activeTab === tab ? "1px solid rgba(96,165,250,0.3)" : "1px solid transparent",
-                transition: "all 0.15s",
+                fontFamily: "'Share Tech Mono', 'Courier New', monospace", fontSize: 10,
+                letterSpacing: "0.15em", textTransform: "uppercase",
+                padding: "6px 12px", cursor: "pointer",
+                color: activeTab === tab ? "#dc2626" : "rgba(255,255,255,0.3)",
+                background: activeTab === tab ? "rgba(220,38,38,0.08)" : "transparent",
+                border: activeTab === tab ? "1px solid rgba(220,38,38,0.3)" : "1px solid transparent",
+                borderRadius: 0,
                 whiteSpace: "nowrap",
               }}>
-                {tab === "feed" ? `Feed${!loading ? ` (${filteredItems.length})` : ""}` : "SitReps"}
+                {tab === "feed" ? `FEED${!loading ? ` [${filteredItems.length}]` : ""}` : "SITREP"}
               </button>
             ))}
           </div>
 
           {/* Status */}
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-            <span className="live-dot" style={{
-              width: 7, height: 7, borderRadius: "50%",
-              background: error ? "#f87171" : "#4ade80", flexShrink: 0,
+            <span style={{
+              width: 6, height: 6, borderRadius: "50%",
+              background: error ? "#dc2626" : "#16a34a", flexShrink: 0,
+              boxShadow: error ? "0 0 6px #dc2626" : "0 0 6px #16a34a",
             }} />
             <span style={{
-              fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: "0.08em",
-              color: error ? "#f87171" : "rgba(255,255,255,0.35)",
-              display: "none",
-            }} id="status-label">{error ? "DEGRADED" : "LIVE"}</span>
-            {lastUpdate && (
-              <span style={{
-                fontFamily: "'DM Mono', monospace", fontSize: 10,
-                color: "rgba(255,255,255,0.2)",
-                display: "none",
-              }} id="time-label">{lastUpdate.toLocaleTimeString()}</span>
-            )}
-            <style>{`
-              @media (min-width: 640px) {
-                #status-label, #time-label { display: inline !important; }
-              }
-            `}</style>
+              fontFamily: "'Share Tech Mono', 'Courier New', monospace", fontSize: 9,
+              color: error ? "#dc2626" : "rgba(255,255,255,0.3)", letterSpacing: "0.1em",
+            }}>{error ? "DEGRADED" : "LIVE"}</span>
           </div>
         </div>
       </header>
 
-      {/* ── Main layout ── */}
-      <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 16px 60px" }}>
-        <div style={{ display: "flex", gap: 24, paddingTop: 24, alignItems: "flex-start" }}>
+      {/* Main */}
+      <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 16px 80px" }}>
+        <div style={{ display: "flex", gap: 20, paddingTop: 20, alignItems: "flex-start" }}>
 
-          {/* ── Desktop Sidebar ── */}
+          {/* Desktop Sidebar */}
           <aside className="desktop-sidebar" style={{
-            width: 240, flexShrink: 0, position: "sticky", top: 78,
+            width: 220, flexShrink: 0, position: "sticky", top: 90,
             flexDirection: "column", gap: 0,
-            background: "#0f1117",
-            border: "1px solid rgba(255,255,255,0.07)",
-            borderRadius: 14, overflow: "hidden",
+            background: "#0d1117",
+            border: "1px solid rgba(255,255,255,0.08)",
+            borderRadius: 0, overflow: "hidden",
           }}>
-            <div style={{ padding: "14px 16px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-                <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, letterSpacing: "0.16em", textTransform: "uppercase", color: "rgba(255,255,255,0.28)" }}>Filters</span>
-                {activeFilterCount > 0 && (
-                  <button onClick={() => setFilters(INIT_FILTERS)} style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: "#60a5fa", background: "none", border: "none", cursor: "pointer" }}>
-                    Clear ({activeFilterCount})
-                  </button>
-                )}
-              </div>
-              <input
-                type="text" value={filters.search}
-                onChange={e => setFilter("search", e.target.value)}
-                placeholder="Search…"
-                style={{
-                  ...selStyle, width: "100%", marginBottom: 10,
-                  background: "rgba(255,255,255,0.05)",
-                }}
-              />
-              {[
-                { label: "Region", key: "region" as keyof FilterState, opts: uniqForSidebar(items.map(i => i.region)) },
-                { label: "Domain", key: "event_domain" as keyof FilterState, opts: uniqForSidebar(items.map(i => i.event_domain)) },
-                { label: "Weapon", key: "weapon_type" as keyof FilterState, opts: uniqForSidebar(items.map(i => i.weapon_type)) },
-                { label: "Actor", key: "actor_primary" as keyof FilterState, opts: uniqForSidebar(items.map(i => i.actor_primary)) },
-                { label: "Claim", key: "claim_status" as keyof FilterState, opts: uniqForSidebar(items.map(i => i.claim_status)) },
-                { label: "Confidence", key: "confidence" as keyof FilterState, opts: ["high","medium","low"].filter(c => items.some(i => i.confidence === c)) },
-              ].map(({ label, key, opts }) => (
-                <div key={key} style={{ marginBottom: 8 }}>
-                  <label style={{ fontSize: 9, fontFamily: "'DM Mono', monospace", letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(255,255,255,0.28)", display: "block", marginBottom: 4 }}>{label}</label>
-                  <div style={{ position: "relative" }}>
-                    <select value={filters[key]} onChange={e => setFilter(key, e.target.value)} style={selStyle}>
-                      <option value="">All</option>
-                      {opts.map(o => <option key={o} value={o}>{humanize(o)}</option>)}
-                    </select>
-                    <span style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", color: "rgba(255,255,255,0.25)", pointerEvents: "none", fontSize: 9 }}>▼</span>
-                  </div>
-                </div>
+            <div style={{ padding: "10px 14px", borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.02)" }}>
+              <span style={{ fontFamily: "'Share Tech Mono', 'Courier New', monospace", fontSize: 9, letterSpacing: "0.2em", color: "rgba(255,255,255,0.25)" }}>// SOURCE PLATFORM</span>
+            </div>
+            <div style={{ padding: "10px 14px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+              {PLATFORM_OPTIONS.map(opt => (
+                <button key={opt.value} onClick={() => setSourcePlatform(opt.value)} style={{
+                  display: "flex", alignItems: "center", gap: 8, width: "100%",
+                  padding: "6px 8px", marginBottom: 3, cursor: "pointer", borderRadius: 0,
+                  background: sourcePlatform === opt.value ? "rgba(255,255,255,0.05)" : "transparent",
+                  border: sourcePlatform === opt.value ? `1px solid ${opt.color}30` : "1px solid transparent",
+                  color: sourcePlatform === opt.value ? opt.color : "rgba(255,255,255,0.3)",
+                  fontFamily: "'Share Tech Mono', 'Courier New', monospace", fontSize: 10,
+                  letterSpacing: "0.12em",
+                  textAlign: "left",
+                }}>
+                  <span style={{ width: 5, height: 5, borderRadius: "50%", background: sourcePlatform === opt.value ? opt.color : "rgba(255,255,255,0.15)", flexShrink: 0 }} />
+                  {opt.label}
+                </button>
               ))}
             </div>
 
+            <div style={{ padding: "10px 14px", borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.02)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <span style={{ fontFamily: "'Share Tech Mono', 'Courier New', monospace", fontSize: 9, letterSpacing: "0.2em", color: "rgba(255,255,255,0.25)" }}>// FILTERS</span>
+                {activeFilterCount > 0 && (
+                  <button onClick={() => setFilters(INIT_FILTERS)} style={{ fontFamily: "'Share Tech Mono', 'Courier New', monospace", fontSize: 9, color: "#dc2626", background: "none", border: "none", cursor: "pointer", letterSpacing: "0.08em" }}>
+                    CLR [{activeFilterCount}]
+                  </button>
+                )}
+              </div>
+              {sourcePlatform === "telegram" && (
+                <>
+                  <input type="text" value={filters.search}
+                    onChange={e => setFilter("search", e.target.value)}
+                    placeholder="SEARCH..."
+                    style={{ ...selStyle, width: "100%", marginBottom: 8 }}
+                  />
+                  {[
+                    { label: "REGION", key: "region" as keyof FilterState, opts: uniqForSidebar(items.map(i => i.region)) },
+                    { label: "DOMAIN", key: "event_domain" as keyof FilterState, opts: uniqForSidebar(items.map(i => i.event_domain)) },
+                    { label: "WEAPON", key: "weapon_type" as keyof FilterState, opts: uniqForSidebar(items.map(i => i.weapon_type)) },
+                    { label: "ACTOR", key: "actor_primary" as keyof FilterState, opts: uniqForSidebar(items.map(i => i.actor_primary)) },
+                    { label: "CLAIM", key: "claim_status" as keyof FilterState, opts: uniqForSidebar(items.map(i => i.claim_status)) },
+                    { label: "CONF", key: "confidence" as keyof FilterState, opts: ["high","medium","low"].filter(c => items.some(i => i.confidence === c)) },
+                  ].map(({ label, key, opts }) => (
+                    <div key={key} style={{ marginBottom: 6 }}>
+                      <label style={{ fontSize: 8, fontFamily: "'Share Tech Mono', 'Courier New', monospace", letterSpacing: "0.18em", color: "rgba(255,255,255,0.22)", display: "block", marginBottom: 3 }}>{label}</label>
+                      <div style={{ position: "relative" }}>
+                        <select value={filters[key]} onChange={e => setFilter(key, e.target.value)} style={selStyle}>
+                          <option value="">ALL</option>
+                          {opts.map(o => <option key={o} value={o}>{o.toUpperCase().replace(/_/g," ")}</option>)}
+                        </select>
+                        <span style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", color: "rgba(255,255,255,0.2)", pointerEvents: "none", fontSize: 8 }}>▼</span>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
+              {sourcePlatform !== "telegram" && (
+                <div style={{ padding: "8px 0" }}>
+                  <span style={{ fontSize: 9, fontFamily: "'Share Tech Mono', 'Courier New', monospace", color: "rgba(255,255,255,0.2)", letterSpacing: "0.1em" }}>
+                    FILTERS AVAILABLE IN FULL INTEGRATION MODE
+                  </span>
+                </div>
+              )}
+            </div>
+
             {/* Stats */}
-            <div style={{ padding: "14px 16px" }}>
-              <div style={{ fontSize: 9, fontFamily: "'DM Mono', monospace", letterSpacing: "0.16em", textTransform: "uppercase", color: "rgba(255,255,255,0.22)", marginBottom: 10 }}>Signal Breakdown</div>
+            <div style={{ padding: "10px 14px" }}>
+              <div style={{ fontSize: 8, fontFamily: "'Share Tech Mono', 'Courier New', monospace", letterSpacing: "0.2em", color: "rgba(255,255,255,0.2)", marginBottom: 8 }}>// SIGNAL BREAKDOWN</div>
               {[
-                { label: "Kinetic", val: domainCounts.kinetic, color: "#f87171" },
-                { label: "Air Defense", val: domainCounts.air_defense, color: "#fb923c" },
-                { label: "Diplomatic", val: domainCounts.political_diplomatic, color: "#60a5fa" },
-                { label: "Cyber", val: domainCounts.cyber, color: "#c084fc" },
-                { label: "High Conf.", val: domainCounts.high_conf, color: "#4ade80" },
+                { label: "KINETIC", val: domainCounts.kinetic, color: "#dc2626" },
+                { label: "AIR DEF", val: domainCounts.air_defense, color: "#ea580c" },
+                { label: "DIPLOM", val: domainCounts.political_diplomatic, color: "#2563eb" },
+                { label: "CYBER", val: domainCounts.cyber, color: "#7c3aed" },
+                { label: "HIGH CONF", val: domainCounts.high_conf, color: "#16a34a" },
               ].map(({ label, val, color }) => (
-                <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 7 }}>
-                  <span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", fontFamily: "'DM Mono', monospace" }}>{label}</span>
-                  <span style={{ fontSize: 12, color, fontWeight: 600, fontFamily: "'DM Mono', monospace" }}>{val}</span>
+                <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                  <span style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", fontFamily: "'Share Tech Mono', 'Courier New', monospace", letterSpacing: "0.08em" }}>{label}</span>
+                  <span style={{ fontSize: 11, color, fontFamily: "'Share Tech Mono', 'Courier New', monospace" }}>{val.toString().padStart(3, "0")}</span>
                 </div>
               ))}
             </div>
           </aside>
 
-          {/* ── Main Content ── */}
+          {/* Main Content */}
           <main style={{ flex: 1, minWidth: 0 }}>
 
             {/* Feed Tab */}
             {activeTab === "feed" && (
               <>
-                {/* Mobile filter bar */}
-                <div style={{
-                  display: "flex", gap: 8, marginBottom: 16, alignItems: "center",
-                }}>
-                  <button
-                    className="filter-fab"
-                    onClick={() => setFilterOpen(true)}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 6,
-                      padding: "8px 14px", borderRadius: 9,
-                      background: activeFilterCount > 0 ? "rgba(96,165,250,0.15)" : "rgba(255,255,255,0.06)",
-                      border: `1px solid ${activeFilterCount > 0 ? "rgba(96,165,250,0.35)" : "rgba(255,255,255,0.1)"}`,
-                      color: activeFilterCount > 0 ? "#93c5fd" : "rgba(255,255,255,0.5)",
-                      fontFamily: "'DM Mono', monospace", fontSize: 11, cursor: "pointer",
-                      letterSpacing: "0.06em",
-                    }}
-                  >
-                    <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-                      <path d="M1 2.5h11M3 6.5h7M5 10.5h3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-                    </svg>
-                    Filters{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ""}
-                  </button>
-                  {filters.search.length === 0 && (
-                    <div style={{ flex: 1, position: "relative" }} className="filter-fab">
-                      <input
-                        type="text" value={filters.search}
-                        onChange={e => setFilter("search", e.target.value)}
-                        placeholder="Search signals…"
-                        style={{
-                          width: "100%", padding: "8px 12px",
-                          borderRadius: 9, fontSize: 13,
-                          background: "rgba(255,255,255,0.05)",
-                          border: "1px solid rgba(255,255,255,0.1)",
-                          color: "rgba(255,255,255,0.8)", outline: "none",
-                          fontFamily: "'DM Mono', monospace",
-                        }}
-                      />
+                {/* Source platform selector (mobile + top bar) */}
+                <div style={{ display: "flex", gap: 6, marginBottom: 14, alignItems: "center", flexWrap: "wrap" }}>
+                  {/* Platform dropdown (mobile-primary, also shown on desktop for quick switching) */}
+                  <div style={{ position: "relative", flexShrink: 0 }}>
+                    <select
+                      value={sourcePlatform}
+                      onChange={e => setSourcePlatform(e.target.value as SourcePlatform)}
+                      style={{
+                        padding: "7px 28px 7px 10px", borderRadius: 0,
+                        background: "#0d1117",
+                        border: `1px solid ${currentPlatform.color}40`,
+                        color: currentPlatform.color,
+                        fontSize: 10, fontFamily: "'Share Tech Mono', 'Courier New', monospace",
+                        outline: "none", cursor: "pointer",
+                        appearance: "none", WebkitAppearance: "none",
+                        letterSpacing: "0.1em",
+                      }}
+                    >
+                      {PLATFORM_OPTIONS.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                    <span style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", color: currentPlatform.color, pointerEvents: "none", fontSize: 9 }}>▼</span>
+                  </div>
+
+                  {/* Filter button (mobile) */}
+                  {sourcePlatform === "telegram" && (
+                    <button
+                      className="filter-fab"
+                      onClick={() => setFilterOpen(true)}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 5,
+                        padding: "7px 12px", borderRadius: 0,
+                        background: activeFilterCount > 0 ? "rgba(220,38,38,0.1)" : "rgba(255,255,255,0.04)",
+                        border: `1px solid ${activeFilterCount > 0 ? "rgba(220,38,38,0.4)" : "rgba(255,255,255,0.1)"}`,
+                        color: activeFilterCount > 0 ? "#dc2626" : "rgba(255,255,255,0.4)",
+                        fontFamily: "'Share Tech Mono', 'Courier New', monospace", fontSize: 10, cursor: "pointer",
+                        letterSpacing: "0.1em",
+                      }}
+                    >
+                      FILTER{activeFilterCount > 0 ? ` [${activeFilterCount}]` : ""}
+                    </button>
+                  )}
+
+                  <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.06)" }} />
+
+                  {sourcePlatform !== "telegram" && (
+                    <div style={{ padding: "5px 10px", background: "rgba(255,165,0,0.06)", border: "1px solid rgba(255,165,0,0.2)", borderRadius: 0 }}>
+                      <span style={{ fontSize: 9, fontFamily: "'Share Tech Mono', 'Courier New', monospace", color: "rgba(255,165,0,0.7)", letterSpacing: "0.1em" }}>
+                        ⚠ DEMO DATA — INTEGRATION NOT YET ACTIVE
+                      </span>
                     </div>
                   )}
                 </div>
 
-                {loading && (
-                  <div style={{
-                    background: "#13161e", border: "1px solid rgba(255,255,255,0.06)",
-                    borderRadius: 12, padding: "48px 24px", textAlign: "center",
-                    fontFamily: "'DM Mono', monospace", fontSize: 12, letterSpacing: "0.1em",
-                    color: "rgba(255,255,255,0.2)",
-                  }}>Loading signals…</div>
-                )}
-
-                {error && (
-                  <div style={{
-                    padding: "12px 16px", marginBottom: 14, borderRadius: 10,
-                    background: "rgba(248,113,113,0.07)", border: "1px solid rgba(248,113,113,0.2)",
-                    fontFamily: "'DM Mono', monospace", fontSize: 12, color: "#fca5a5",
-                  }}>⚠ {error}</div>
-                )}
-
-                {!loading && filteredItems.length === 0 && !error && (
-                  <div style={{
-                    background: "#13161e", border: "1px solid rgba(255,255,255,0.06)",
-                    borderRadius: 12, padding: "48px 24px", textAlign: "center",
-                    fontFamily: "'DM Mono', monospace", fontSize: 12, letterSpacing: "0.08em",
-                    color: "rgba(255,255,255,0.18)",
-                  }}>No signals match current filters</div>
-                )}
-
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  {filteredItems.map((item, idx) => (
-                    <div key={`${item.source_name}-${item.external_message_id}`}
-                      className="signal-card"
-                      style={{ animationDelay: `${Math.min(idx * 0.02, 0.25)}s` }}>
-                      <SignalCard item={item} />
+                {/* Telegram Feed */}
+                {sourcePlatform === "telegram" && (
+                  <>
+                    {loading && (
+                      <div style={{
+                        background: "#0d1117", border: "1px solid rgba(255,255,255,0.06)",
+                        padding: "48px 24px", textAlign: "center",
+                        fontFamily: "'Share Tech Mono', 'Courier New', monospace", fontSize: 11, letterSpacing: "0.15em",
+                        color: "rgba(255,255,255,0.2)",
+                      }}>LOADING SIGNALS...</div>
+                    )}
+                    {error && (
+                      <div style={{
+                        padding: "10px 14px", marginBottom: 12,
+                        background: "rgba(220,38,38,0.07)", border: "1px solid rgba(220,38,38,0.2)",
+                        fontFamily: "'Share Tech Mono', 'Courier New', monospace", fontSize: 10, color: "#dc2626", letterSpacing: "0.08em",
+                      }}>⚠ {error.toUpperCase()}</div>
+                    )}
+                    {!loading && filteredItems.length === 0 && !error && (
+                      <div style={{
+                        background: "#0d1117", border: "1px solid rgba(255,255,255,0.06)",
+                        padding: "48px 24px", textAlign: "center",
+                        fontFamily: "'Share Tech Mono', 'Courier New', monospace", fontSize: 11, letterSpacing: "0.1em",
+                        color: "rgba(255,255,255,0.15)",
+                      }}>NO SIGNALS MATCH CURRENT PARAMETERS</div>
+                    )}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {filteredItems.map((item, idx) => (
+                        <div key={`${item.source_name}-${item.external_message_id}`}
+                          className="signal-card"
+                          style={{ animationDelay: `${Math.min(idx * 0.015, 0.2)}s` }}>
+                          <SignalCard item={item} />
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  </>
+                )}
+
+                {/* X Feed */}
+                {sourcePlatform === "x" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {MOCK_X_POSTS.map((post, idx) => (
+                      <div key={post.id} className="signal-card" style={{ animationDelay: `${idx * 0.05}s` }}>
+                        <XPostCard post={post} />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Instagram Feed */}
+                {sourcePlatform === "instagram" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {MOCK_INSTAGRAM_POSTS.map((post, idx) => (
+                      <div key={post.id} className="signal-card" style={{ animationDelay: `${idx * 0.05}s` }}>
+                        <InstaPostCard post={post} />
+                      </div>
+                    ))}
+                  </div>
+                )}
               </>
             )}
 
             {/* SitReps Tab */}
             {activeTab === "narratives" && (
               <div>
-                {/* Window selector */}
-                <div style={{
-                  display: "flex", alignItems: "center", gap: 6, marginBottom: 20,
-                  flexWrap: "wrap",
-                }}>
-                  <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: "rgba(255,255,255,0.3)", marginRight: 2 }}>Window:</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
+                  <span style={{ fontFamily: "'Share Tech Mono', 'Courier New', monospace", fontSize: 9, color: "rgba(255,255,255,0.25)", letterSpacing: "0.15em" }}>WINDOW:</span>
                   {[6, 12, 24, 48].map(h => (
                     <button key={h} onClick={() => setNarrativeWindow(h)} style={{
-                      fontFamily: "'DM Mono', monospace", fontSize: 11, cursor: "pointer",
-                      padding: "5px 12px", borderRadius: 7,
-                      background: narrativeWindow === h ? "rgba(96,165,250,0.15)" : "rgba(255,255,255,0.04)",
-                      border: narrativeWindow === h ? "1px solid rgba(96,165,250,0.35)" : "1px solid rgba(255,255,255,0.08)",
-                      color: narrativeWindow === h ? "#93c5fd" : "rgba(255,255,255,0.35)",
-                      transition: "all 0.15s",
-                    }}>{h}h</button>
+                      fontFamily: "'Share Tech Mono', 'Courier New', monospace", fontSize: 10, cursor: "pointer",
+                      padding: "5px 10px", borderRadius: 0, letterSpacing: "0.1em",
+                      background: narrativeWindow === h ? "rgba(220,38,38,0.1)" : "rgba(255,255,255,0.03)",
+                      border: narrativeWindow === h ? "1px solid rgba(220,38,38,0.4)" : "1px solid rgba(255,255,255,0.08)",
+                      color: narrativeWindow === h ? "#dc2626" : "rgba(255,255,255,0.3)",
+                    }}>{h}H</button>
                   ))}
                 </div>
 
                 {narrativesLoading && (
                   <div style={{
-                    background: "#13161e", border: "1px solid rgba(255,255,255,0.06)",
-                    borderRadius: 12, padding: "48px 24px", textAlign: "center",
-                    fontFamily: "'DM Mono', monospace", fontSize: 12, color: "rgba(255,255,255,0.2)",
-                  }}>Generating situation reports…</div>
+                    background: "#0d1117", border: "1px solid rgba(255,255,255,0.06)",
+                    padding: "48px 24px", textAlign: "center",
+                    fontFamily: "'Share Tech Mono', 'Courier New', monospace", fontSize: 11, color: "rgba(255,255,255,0.2)", letterSpacing: "0.15em",
+                  }}>GENERATING SITREP...</div>
                 )}
-
                 {narrativesError && (
                   <div style={{
-                    padding: "12px 16px", marginBottom: 14, borderRadius: 10,
-                    background: "rgba(248,113,113,0.07)", border: "1px solid rgba(248,113,113,0.2)",
-                    fontFamily: "'DM Mono', monospace", fontSize: 12, color: "#fca5a5",
-                  }}>⚠ {narrativesError}</div>
+                    padding: "10px 14px", marginBottom: 12,
+                    background: "rgba(220,38,38,0.07)", border: "1px solid rgba(220,38,38,0.2)",
+                    fontFamily: "'Share Tech Mono', 'Courier New', monospace", fontSize: 10, color: "#dc2626",
+                  }}>⚠ {narrativesError.toUpperCase()}</div>
                 )}
-
                 {!narrativesLoading && narratives.length === 0 && !narrativesError && (
                   <div style={{
-                    background: "#13161e", border: "1px solid rgba(255,255,255,0.06)",
-                    borderRadius: 12, padding: "48px 24px", textAlign: "center",
+                    background: "#0d1117", border: "1px solid rgba(255,255,255,0.06)",
+                    padding: "48px 24px", textAlign: "center",
                   }}>
-                    <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, color: "rgba(255,255,255,0.18)", letterSpacing: "0.08em", marginBottom: 8 }}>No situation reports yet</div>
-                    <div style={{ fontSize: 13, color: "rgba(255,255,255,0.12)" }}>Reports auto-generate every {narrativeWindow} hours.</div>
+                    <div style={{ fontFamily: "'Share Tech Mono', 'Courier New', monospace", fontSize: 11, color: "rgba(255,255,255,0.15)", letterSpacing: "0.12em", marginBottom: 6 }}>NO SITREP AVAILABLE</div>
+                    <div style={{ fontSize: 12, color: "rgba(255,255,255,0.1)", fontFamily: "'Share Tech Mono', monospace" }}>REPORTS AUTO-GENERATE EVERY {narrativeWindow}H</div>
                   </div>
                 )}
-
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {narratives.map(n => <NarrativeCard key={n.id} n={n} />)}
                 </div>
               </div>
@@ -878,32 +1177,33 @@ export default function SignalMap() {
         </div>
       </div>
 
-      {/* Mobile filter FAB */}
-      {activeTab === "feed" && (
+      {/* Mobile Filter FAB (Telegram only) */}
+      {activeTab === "feed" && sourcePlatform === "telegram" && (
         <button
           className="filter-fab"
           onClick={() => setFilterOpen(true)}
           style={{
-            position: "fixed", bottom: 24, right: 20, zIndex: 40,
-            width: 52, height: 52, borderRadius: "50%",
-            background: "linear-gradient(135deg, #3b82f6, #6366f1)",
-            border: "none", cursor: "pointer", boxShadow: "0 4px 24px rgba(59,130,246,0.4)",
+            position: "fixed", bottom: 20, right: 16, zIndex: 40,
+            width: 46, height: 46, borderRadius: 0,
+            background: "#0d1117",
+            border: `1px solid ${activeFilterCount > 0 ? "rgba(220,38,38,0.5)" : "rgba(255,255,255,0.15)"}`,
+            cursor: "pointer",
             display: "flex", alignItems: "center", justifyContent: "center",
-            color: "#fff",
+            color: activeFilterCount > 0 ? "#dc2626" : "rgba(255,255,255,0.5)",
           }}
           aria-label="Open filters"
         >
           {activeFilterCount > 0 && (
             <span style={{
-              position: "absolute", top: -4, right: -4,
-              width: 18, height: 18, borderRadius: "50%",
-              background: "#f87171", fontSize: 10, fontFamily: "'DM Mono', monospace",
-              fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center",
-              border: "2px solid #0a0d14",
+              position: "absolute", top: -6, right: -6,
+              width: 16, height: 16, borderRadius: 0,
+              background: "#dc2626", fontSize: 9, fontFamily: "'Share Tech Mono', monospace",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              border: "1px solid #080b10",
             }}>{activeFilterCount}</span>
           )}
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-            <path d="M3 5h14M6 10h8M9 15h2" stroke="white" strokeWidth="1.8" strokeLinecap="round"/>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M1 3h14M4 8h8M7 13h2" stroke="currentColor" strokeWidth="1.2" strokeLinecap="square"/>
           </svg>
         </button>
       )}
