@@ -229,6 +229,56 @@ function FilterDrawer({
   );
 }
 
+function VideoPlayer({ url }: { url: string }) {
+  const [active, setActive] = useState(false);
+
+  if (!active) {
+    return (
+      <button
+        onClick={() => setActive(true)}
+        style={{
+          display: "flex", alignItems: "center", justifyContent: "center",
+          width: "100%", aspectRatio: "16/9", maxHeight: 260,
+          borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)",
+          background: "rgba(0,0,0,0.4)", cursor: "pointer",
+          marginBottom: 12, gap: 10, color: "rgba(255,255,255,0.6)",
+          fontFamily: "'DM Mono', monospace", fontSize: 11,
+          letterSpacing: "0.08em",
+          transition: "background 0.15s, border-color 0.15s",
+        }}
+        onMouseEnter={e => {
+          (e.currentTarget as HTMLButtonElement).style.background = "rgba(59,130,246,0.12)";
+          (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(96,165,250,0.3)";
+        }}
+        onMouseLeave={e => {
+          (e.currentTarget as HTMLButtonElement).style.background = "rgba(0,0,0,0.4)";
+          (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(255,255,255,0.1)";
+        }}
+      >
+        <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+          <circle cx="18" cy="18" r="17" stroke="rgba(255,255,255,0.15)" strokeWidth="1.5"/>
+          <polygon points="14,11 27,18 14,25" fill="rgba(255,255,255,0.7)"/>
+        </svg>
+        <span>Tap to play video</span>
+      </button>
+    );
+  }
+
+  return (
+    <video
+      src={url}
+      controls
+      autoPlay
+      preload="metadata"
+      style={{
+        maxWidth: "100%", borderRadius: 8,
+        border: "1px solid rgba(255,255,255,0.07)",
+        marginBottom: 12, display: "block",
+      }}
+    />
+  );
+}
+
 function SignalCard({ item }: { item: MessageItem }) {
   const domain = DOMAIN_META[item.event_domain ?? ""] ?? { color: "#64748b", bg: "rgba(100,116,139,0.08)", label: "" };
   const claimColor = CLAIM_COLOR[item.claim_status ?? ""] ?? "#64748b";
@@ -289,17 +339,14 @@ function SignalCard({ item }: { item: MessageItem }) {
 
       {/* Media */}
       {item.media_url && item.media_type === "image" && (
-        <img src={item.media_url} alt="signal media" style={{
+        <img src={item.media_url} alt="signal media" loading="lazy" style={{
           maxWidth: "100%", maxHeight: 260, objectFit: "cover",
           borderRadius: 8, border: "1px solid rgba(255,255,255,0.07)",
           marginBottom: 12, display: "block",
         }} />
       )}
       {item.media_url && item.media_type === "video" && (
-        <video src={item.media_url} controls style={{
-          maxWidth: "100%", borderRadius: 8,
-          border: "1px solid rgba(255,255,255,0.07)", marginBottom: 12, display: "block",
-        }} />
+        <VideoPlayer url={item.media_url} />
       )}
       {item.media_url && item.media_type === "document" && (
         <a href={item.media_url} target="_blank" rel="noreferrer" style={{
