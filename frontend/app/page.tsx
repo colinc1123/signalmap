@@ -838,7 +838,7 @@ export default function SignalMap() {
           display: "flex", alignItems: "center", justifyContent: "space-between",
         }}>
           <span style={{ fontFamily: "'Share Tech Mono', 'Courier New', monospace", fontSize: 9, letterSpacing: "0.2em", color: "rgba(220,38,38,0.7)" }}>
-            CLASSIFIED // OSINT // OPEN SOURCE ONLY // NOT FOR DISTRIBUTION
+            BY COLIN CAMMACK // OSINT // OPEN SOURCE ONLY
           </span>
           <span style={{ fontFamily: "'Share Tech Mono', 'Courier New', monospace", fontSize: 9, letterSpacing: "0.12em", color: "rgba(255,255,255,0.25)" }}>
             {utcTime} UTC
@@ -866,7 +866,7 @@ export default function SignalMap() {
                 fontFamily: "'Share Tech Mono', 'Courier New', monospace", fontWeight: 400, fontSize: 15,
                 letterSpacing: "0.2em", lineHeight: 1, color: "#f8fafc",
               }}>
-                SIGNAL<span style={{ color: "#dc2626" }}>MAP</span>
+                SIGNAL<span style={{ color: "#dc2626" }}>THREAD</span>
                 <span className="blink" style={{ color: "#dc2626", marginLeft: 2 }}>_</span>
               </div>
               <div style={{
