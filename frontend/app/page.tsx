@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState, useCallback } from "react";
 
 const API_BASE = "https://signalmap-production-111b.up.railway.app";
 
-type SourcePlatform = "telegram" | "x" | "instagram";
+type SourcePlatform = "telegram" | "x";
 
 type MessageItem = {
   id: number;
@@ -95,18 +95,7 @@ const INIT_FILTERS: FilterState = {
   weapon_type: "", claim_status: "", confidence: "", actor_primary: "",
 };
 
-// Detect platform from source_name:
-// X posts are stored with source_name = "@handle"
-// Instagram posts are stored with plain "handle" (no @)
-// Telegram posts are channel names / titles (no @)
-function detectPlatform(source_name: string): SourcePlatform {
-  if (source_name.startsWith("@")) return "x";
-  // Instagram accounts configured without @ prefix
-  // We can't perfectly distinguish IG from Telegram by name alone,
-  // but we store IG accounts without @ and Telegram as channel titles
-  // The best we can do: rely on source_name conventions set by each collector
-  return "telegram";
-}
+
 
 function ConfidencePips({ level }: { level: string | null }) {
   const levels = ["low", "medium", "high"];
@@ -431,116 +420,7 @@ function XSignalCard({ item }: { item: MessageItem }) {
   );
 }
 
-// Instagram card — same data, IG branding
-function IGSignalCard({ item }: { item: MessageItem }) {
-  const domain = DOMAIN_META[item.event_domain ?? ""] ?? { color: "#6b7280", bg: "rgba(107,114,128,0.08)", label: "UNK" };
-  const claimColor = CLAIM_COLOR[item.claim_status ?? ""] ?? "#6b7280";
 
-  return (
-    <article style={{
-      background: "#0d1117",
-      border: "1px solid rgba(255,255,255,0.07)",
-      borderLeft: `2px solid ${domain.color}`,
-      borderRadius: 0,
-      padding: "14px 16px",
-    }}>
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
-        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "3px 8px", flex: 1, minWidth: 0 }}>
-          {item.event_domain && (
-            <span style={{
-              fontSize: 9, fontFamily: "'Share Tech Mono', 'Courier New', monospace",
-              letterSpacing: "0.12em", padding: "2px 6px", borderRadius: 0,
-              background: domain.bg, color: domain.color,
-              border: `1px solid ${domain.color}40`,
-            }}>{domain.label}</span>
-          )}
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2">
-              <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
-              <circle cx="12" cy="12" r="4"/>
-              <circle cx="17.5" cy="6.5" r="1" fill="rgba(255,255,255,0.5)" stroke="none"/>
-            </svg>
-            <span style={{ fontSize: 11, fontFamily: "'Share Tech Mono', 'Courier New', monospace", color: "#e879f9" }}>
-              @{item.source_name}
-            </span>
-          </span>
-          {item.country && (
-            <span style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", fontFamily: "'Share Tech Mono', 'Courier New', monospace" }}>
-              {item.country.toUpperCase()}
-            </span>
-          )}
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-          <ConfidencePips level={item.confidence} />
-          <span style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", fontFamily: "'Share Tech Mono', 'Courier New', monospace", whiteSpace: "nowrap" }}>
-            {formatTime(item.posted_at ?? item.collected_at)}Z
-          </span>
-        </div>
-      </div>
-
-      <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
-        {item.has_media && (
-          <div style={{
-            width: 72, height: 72, flexShrink: 0,
-            background: "rgba(255,255,255,0.04)",
-            border: "1px solid rgba(255,255,255,0.1)",
-            borderRadius: 0,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            position: "relative",
-          }}>
-            {item.media_type === "video" ? (
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <circle cx="12" cy="12" r="11" stroke="rgba(255,255,255,0.2)" strokeWidth="1"/>
-                <polygon points="10,8 18,12 10,16" fill="rgba(255,255,255,0.5)"/>
-              </svg>
-            ) : (
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5">
-                <rect x="3" y="3" width="18" height="18"/>
-                <circle cx="8.5" cy="8.5" r="1.5"/>
-                <path d="M21 15l-5-5L5 21"/>
-              </svg>
-            )}
-            <span style={{ position: "absolute", bottom: 2, right: 3, fontSize: 8, color: "rgba(255,255,255,0.3)", fontFamily: "'Share Tech Mono', monospace" }}>
-              {item.media_type?.toUpperCase()}
-            </span>
-          </div>
-        )}
-        {item.text && (
-          <p style={{
-            fontSize: 13, lineHeight: 1.65, color: "rgba(255,255,255,0.72)",
-            margin: 0, fontFamily: "Georgia, serif", flex: 1,
-          }}>{item.text}</p>
-        )}
-      </div>
-
-      {item.media_url && item.media_type === "image" && (
-        <img src={item.media_url} alt="signal media" loading="lazy" style={{
-          maxWidth: "100%", maxHeight: 220, objectFit: "cover",
-          borderRadius: 0, border: "1px solid rgba(255,255,255,0.08)",
-          marginBottom: 10, display: "block",
-        }} />
-      )}
-      {item.media_url && item.media_type === "video" && <VideoPlayer url={item.media_url} />}
-
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-        {[
-          item.claim_status && { label: "CLAIM", value: item.claim_status.toUpperCase(), c: claimColor },
-          item.weapon_type && { label: "WPN", value: item.weapon_type.toUpperCase().replace(/_/g," "), c: "#ea580c" },
-          item.has_media && item.media_type && { label: "MEDIA", value: item.media_type.toUpperCase(), c: "#6b7280" },
-        ].filter(Boolean).map((tag: any) => (
-          <span key={tag.label} style={{
-            fontSize: 9, fontFamily: "'Share Tech Mono', 'Courier New', monospace",
-            padding: "2px 6px", borderRadius: 0,
-            background: `${tag.c}12`, border: `1px solid ${tag.c}35`,
-            color: tag.c, letterSpacing: "0.08em",
-          }}>
-            <span style={{ opacity: 0.45, marginRight: 3 }}>{tag.label}:</span>{tag.value}
-          </span>
-        ))}
-      </div>
-    </article>
-  );
-}
 
 function NarrativeCard({ n }: { n: Narrative }) {
   const [expanded, setExpanded] = useState(false);
@@ -703,12 +583,6 @@ export default function SignalMap() {
     [items]
   );
 
-  // Instagram: no @, looks like a handle (lowercase, no spaces, short)
-  const igItems = useMemo(() =>
-    items.filter(i => !i.source_name.startsWith("@") && !i.source_name.includes(" ") && i.source_name === i.source_name.toLowerCase() && i.source_name.length <= 30 && !/[А-яЁё]/.test(i.source_name) && !telegramItems.includes(i)),
-    [items, telegramItems]
-  );
-
   const applyFilters = useCallback((list: MessageItem[]) => {
     return list.filter(item => {
       const q = filters.search.toLowerCase();
@@ -728,9 +602,8 @@ export default function SignalMap() {
 
   const filteredTelegram = useMemo(() => applyFilters(telegramItems), [telegramItems, applyFilters]);
   const filteredX = useMemo(() => applyFilters(xItems), [xItems, applyFilters]);
-  const filteredIG = useMemo(() => applyFilters(igItems), [igItems, applyFilters]);
 
-  const currentFiltered = sourcePlatform === "telegram" ? filteredTelegram : sourcePlatform === "x" ? filteredX : filteredIG;
+  const currentFiltered = sourcePlatform === "telegram" ? filteredTelegram : filteredX;
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
 
   const domainCounts = useMemo(() => ({
@@ -757,7 +630,6 @@ export default function SignalMap() {
   const PLATFORM_OPTIONS: { value: SourcePlatform; label: string; color: string }[] = [
     { value: "telegram", label: "TELEGRAM", color: "#60a5fa" },
     { value: "x", label: "X / TWITTER", color: "rgba(255,255,255,0.7)" },
-    { value: "instagram", label: "INSTAGRAM", color: "#e879f9" },
   ];
 
   const currentPlatform = PLATFORM_OPTIONS.find(p => p.value === sourcePlatform)!;
@@ -1040,8 +912,6 @@ export default function SignalMap() {
                   }}>
                     {sourcePlatform === "x"
                       ? "NO X SIGNALS YET — DEPLOY x_collector.py TO START INGESTING"
-                      : sourcePlatform === "instagram"
-                      ? "NO INSTAGRAM SIGNALS YET — DEPLOY instagram_collector.py TO START INGESTING"
                       : "NO SIGNALS MATCH CURRENT PARAMETERS"}
                   </div>
                 )}
@@ -1060,14 +930,6 @@ export default function SignalMap() {
                       className="signal-card"
                       style={{ animationDelay: `${Math.min(idx * 0.015, 0.2)}s` }}>
                       <XSignalCard item={item} />
-                    </div>
-                  ))}
-
-                  {sourcePlatform === "instagram" && filteredIG.map((item, idx) => (
-                    <div key={`${item.source_name}-${item.external_message_id}`}
-                      className="signal-card"
-                      style={{ animationDelay: `${Math.min(idx * 0.015, 0.2)}s` }}>
-                      <IGSignalCard item={item} />
                     </div>
                   ))}
                 </div>
