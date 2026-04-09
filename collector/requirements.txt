@@ -2,5 +2,4 @@ telethon
 python-dotenv
 requests
 boto3
-tweepy
-instagrapi
+twikit
