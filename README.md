@@ -1,2 +1,2 @@
 # signalthread
-signthread.org
+signalthread.org
